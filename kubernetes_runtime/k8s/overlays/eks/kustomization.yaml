@@ -1,0 +1,32 @@
+# AWS EKS. Placeholders: 111122223333 (account), eu-west-1, certificate / WAF ARNs.
+# Assumes the platform team runs: AWS Load Balancer Controller, External Secrets Operator with a
+# ClusterSecretStore "aws-secrets-manager", an ADOT/OTel collector at otel-collector.observability,
+# metrics-server and Karpenter.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - external-secret.yaml
+  - ingress.yaml
+components:
+  - ../../components/production
+images:
+  - {name: agent-api, newName: 111122223333.dkr.ecr.eu-west-1.amazonaws.com/agent-api, newTag: 0.2.0}
+configMapGenerator:
+  - name: agent-config
+    behavior: merge
+    literals: [DEFAULT_BACKEND=groq]
+patches:
+  # IRSA: pods get short-lived credentials for this IAM role (or use an EKS Pod Identity association).
+  - target: {kind: ServiceAccount, name: agent-api}
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value: {eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/agent-api}
+  # ALB readiness gate: a pod counts as Ready only once the ALB target group reports it healthy,
+  # so a rolling update never outruns the load balancer.
+  - target: {kind: Namespace, name: agent}
+    patch: |
+      - op: add
+        path: /metadata/labels/elbv2.k8s.aws~1pod-readiness-gate-inject
+        value: enabled

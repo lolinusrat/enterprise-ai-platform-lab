@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kubernetes Agent Runtime</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5f6b7a; --line: #dfe3e8; --soft: #eef1f4;
+  --accent: #3b5bdb; --accent-soft: #e7ecff;
+  --s1: #3b5bdb; --s2: #0c8599; --s3: #e8590c;
+  --ok: #2b8a3e; --ok-soft: #e6f4ea; --bad: #c92a2a; --bad-soft: #fdeaea; --warn: #b7791f; --warn-soft: #fff4dc;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa5b1; --line: #2d333b; --soft: #222831;
+    --accent: #7c96ff; --accent-soft: #232c4d;
+    --s1: #7c96ff; --s2: #3bc9db; --s3: #ff922b;
+    --ok: #51cf66; --ok-soft: #1b3324; --bad: #ff6b6b; --bad-soft: #3a1d1d; --warn: #fcc419; --warn-soft: #3a3016;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa5b1; --line: #2d333b; --soft: #222831;
+  --accent: #7c96ff; --accent-soft: #232c4d;
+  --s1: #7c96ff; --s2: #3bc9db; --s3: #ff922b;
+  --ok: #51cf66; --ok-soft: #1b3324; --bad: #ff6b6b; --bad-soft: #3a1d1d; --warn: #fcc419; --warn-soft: #3a3016;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+header { display: flex; align-items: center; gap: 24px; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+header .sub { color: var(--muted); font-size: 13px; }
+nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+nav button { border: 0; background: none; color: var(--muted); padding: 7px 12px; border-radius: 6px; font: inherit; cursor: pointer; }
+nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+main { max-width: 1320px; margin: 0 auto; padding: 20px 24px 60px; }
+section.tab { display: none; } section.tab.active { display: block; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; min-width: 0; }
+.card h2 { font-size: 14px; margin: 0 0 4px; font-weight: 650; }
+.card h3 { font-size: 13px; margin: 14px 0 6px; font-weight: 650; }
+.hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+.grid2 > div { min-width: 0; }
+@media (max-width: 980px) { .grid2 { grid-template-columns: 1fr; } main { padding: 16px; } }
+button.btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
+button.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.btn.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.1); }
+button.btn.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+button.btn:disabled { opacity: .45; cursor: default; }
+button.btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+select, textarea, input { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+textarea { width: 100%; resize: vertical; min-height: 54px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.muted { color: var(--muted); }
+.banner { padding: 8px 12px; border-radius: 8px; background: var(--bad-soft); color: var(--bad); margin-bottom: 12px; font-size: 13px; display: none; }
+
+/* stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.tile .d { font-size: 12px; color: var(--muted); }
+
+/* cluster map */
+.nodes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 640px) { .nodes { grid-template-columns: 1fr; } }
+.node { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--soft); min-height: 150px; }
+.node.cordoned { border-style: dashed; border-color: var(--warn); }
+.node .nh { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; font-weight: 650; margin-bottom: 8px; }
+.node .nh .tag { font-weight: 500; color: var(--muted); }
+.pod { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; cursor: pointer; font: inherit; color: var(--ink); }
+.pod:hover { border-color: var(--accent); }
+.pod.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.pod .pn { font-family: var(--mono); font-size: 11.5px; }
+.pod .pm { display: flex; gap: 8px; font-size: 11.5px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+.st { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.st::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st.Ready { color: var(--ok); } .st.Starting, .st.NotReady { color: var(--warn); } .st.Terminating, .st.Pending { color: var(--muted); }
+.st.NotReady::before { border-radius: 1px; }
+.restarts { color: var(--bad); font-weight: 600; }
+.pod.Terminating { opacity: .55; } .pod.Pending { border-style: dashed; }
+.selbar { margin-top: 10px; padding: 10px; border-radius: 8px; background: var(--soft); font-size: 13px; }
+
+/* charts */
+.chart { position: relative; margin-bottom: 6px; }
+.chart .ct { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.chart .ct b { color: var(--ink); font-weight: 650; }
+.chart svg { display: block; width: 100%; height: 92px; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 10px; }
+.chart .ref { stroke: var(--muted); stroke-dasharray: 4 4; stroke-width: 1; }
+.chart .xh { stroke: var(--muted); stroke-width: 1; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 4px; }
+.tip { position: fixed; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none; z-index: 10; font-variant-numeric: tabular-nums; }
+
+/* feeds */
+.feed { max-height: 330px; overflow: auto; font-size: 12.5px; }
+.feed div { padding: 5px 0; border-bottom: 1px solid var(--soft); display: grid; grid-template-columns: 62px 78px 1fr; gap: 8px; }
+.badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--soft); color: var(--muted); height: fit-content; }
+.badge.action { background: var(--accent-soft); color: var(--accent); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.chat { background: var(--ok-soft); color: var(--ok); }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--soft); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.tablewrap { overflow-x: auto; }
+a { color: var(--accent); }
+td.nw { white-space: nowrap; }
+.answer { background: var(--soft); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
+.chips span { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; margin: 2px 4px 2px 0; }
+.bar { height: 8px; background: var(--s1); border-radius: 0 4px 4px 0; }
+.barrow { display: grid; grid-template-columns: 150px 1fr 60px; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 6px; }
+.progress { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.progress > div { height: 100%; background: var(--ok); transition: width .4s; }
+
+/* diagrams */
+.diagram { width: 100%; height: auto; display: block; }
+svg text { font-family: inherit; fill: var(--ink); }
+svg .lane { fill: var(--soft); stroke: none; }
+svg .lane-title { font-size: 11px; font-weight: 650; fill: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+svg .box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+svg .box.hl { stroke: var(--accent); }
+svg .box.dash { stroke-dasharray: 5 4; }
+svg .ns { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+svg .t { font-size: 12.5px; font-weight: 650; }
+svg .s { font-size: 11px; fill: var(--muted); }
+svg .edge { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+svg .edge.dash { stroke-dasharray: 5 4; }
+svg .edge.acc { stroke: var(--accent); marker-end: url(#arrowA); }
+svg .el { font-size: 10.5px; fill: var(--muted); }
+svg .chip { fill: var(--soft); stroke: var(--line); }
+.steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.step { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--panel); font-size: 12.5px; position: relative; }
+.step b { display: block; font-size: 12.5px; margin-bottom: 2px; }
+.step .n { display: inline-block; min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; text-align: center; line-height: 18px; margin-right: 6px; }
+.step span.muted { font-size: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); color: var(--muted); padding: 6px 14px; font: inherit; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Kubernetes Agent Runtime</h1>
+    <div class="sub">Agent API on a local kind cluster: autoscaling, health checks, secrets and telemetry</div>
+  </div>
+  <nav>
+    <button class="active" data-tab="run">Live run</button>
+    <button data-tab="arch">Architecture &amp; flows</button>
+    <button data-tab="prod">Production (EKS / GKE)</button>
+  </nav>
+</header>
+<main>
+<div class="banner" id="banner"></div>
+
+<!-- ============================================================ RUN -->
+<section class="tab active" id="tab-run">
+  <div class="tiles">
+    <div class="tile"><div class="k">Ready replicas</div><div class="v" id="t-ready">-</div><div class="d" id="t-ready-d">&nbsp;</div></div>
+    <div class="tile"><div class="k">HPA CPU (avg of requests)</div><div class="v" id="t-cpu">-</div><div class="d" id="t-cpu-d">&nbsp;</div></div>
+    <div class="tile"><div class="k">Throughput</div><div class="v" id="t-rps">-</div><div class="d" id="t-rps-d">&nbsp;</div></div>
+    <div class="tile"><div class="k">Latency p95</div><div class="v" id="t-p95">-</div><div class="d" id="t-p95-d">&nbsp;</div></div>
+    <div class="tile"><div class="k">Error rate (5s)</div><div class="v" id="t-err">-</div><div class="d" id="t-err-d">&nbsp;</div></div>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h2>Cluster</h2>
+        <p class="hint">Pods of the <span class="mono">agent-api</span> Deployment by node, refreshed every 2s. Select a pod to break it.</p>
+        <div class="nodes" id="nodes"></div>
+        <div class="selbar" id="selbar">No pod selected.</div>
+      </div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h2>Scaling over time</h2>
+          <span class="muted" style="font-size:12px">last 10 minutes · hover to read values</span>
+        </div>
+        <div class="chart" id="c-rep"></div>
+        <div class="chart" id="c-cpu"></div>
+        <div class="chart" id="c-rps"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Load</h2>
+        <p class="hint">Fixed request rate against <span class="mono">localhost:18080</span>. Each request calls the CPU-bound <span class="mono">risk_score</span> tool, so load becomes CPU and the HPA reacts.</p>
+        <div class="row">
+          <div class="seg" id="rps-seg">
+            <button data-rps="0" class="on">Off</button><button data-rps="20">20/s</button><button data-rps="80">80/s</button><button data-rps="200">200/s</button>
+          </div>
+          <select id="dur"><option value="120">2 min</option><option value="300" selected>5 min</option><option value="600">10 min</option></select>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:8px" id="load-status">Idle.</div>
+        <h3>Requests served per pod (last 5s)</h3>
+        <div id="by-pod" class="muted" style="font-size:12px">No traffic.</div>
+      </div>
+      <div class="card">
+        <h2>Operations</h2>
+        <p class="hint">Each of these should cause zero failed requests. Start some load first to see it.</p>
+        <div class="row">
+          <button class="btn" id="b-roll" title="Patch the pod template: new ReplicaSet, maxSurge 1, maxUnavailable 0">Rolling update</button>
+          <button class="btn" id="b-rot" title="New API token in the Secret, old one kept as previous">Rotate API token</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <select id="drain-node"><option>agent-runtime-worker</option><option>agent-runtime-worker2</option></select>
+          <button class="btn danger" id="b-drain">Drain node</button>
+          <button class="btn" id="b-uncordon">Uncordon</button>
+        </div>
+        <div id="rotation" style="font-size:12.5px;margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <h2>Activity</h2>
+        <p class="hint">Your actions and Kubernetes events in the <span class="mono">agent</span> namespace.</p>
+        <div class="feed" id="feed"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Ask the agent</h2>
+      <p class="hint">Goes through the Service like any client. <b>groq</b> calls <span class="mono">gpt-oss-20b</span> with tool use; <b>scripted</b> is deterministic and offline.</p>
+      <textarea id="msg">What is the status and fraud risk of order A1003?</textarea>
+      <div class="row" style="margin-top:8px">
+        <select id="backend"></select>
+        <button class="btn primary" id="b-send">Send</button>
+        <span class="muted" style="font-size:12px">Try: <a href="#" class="ex">Where is A1002?</a> · <a href="#" class="ex">What is (129 + 54.5) * 1.08?</a></span>
+      </div>
+      <div id="answer"></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>Traces</h2>
+        <a id="jaeger-link" href="#" target="_blank" style="font-size:12px">Open Jaeger</a>
+      </div>
+      <p class="hint">Latest traces from Jaeger (agent → OTLP → collector → Jaeger). Pod and node come from span resource attributes.</p>
+      <div class="tablewrap"><table><thead><tr><th>Time</th><th>Root span</th><th>ms</th><th>Pod</th><th>Agent spans</th></tr></thead><tbody id="traces"></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ARCH -->
+<section class="tab" id="tab-arch">
+  <div class="card">
+    <h2>Local architecture</h2>
+    <p class="hint">What <span class="mono">scripts/up.sh</span> deploys. Solid arrows carry requests or telemetry; dashed arrows are control actions.</p>
+    <svg class="diagram" viewBox="0 0 1100 560" role="img" aria-label="Local kind cluster architecture">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+        <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+      </defs>
+      <rect class="lane" x="15" y="30" width="200" height="520" rx="10"/>
+      <text class="lane-title" x="30" y="52">Host (macOS)</text>
+      <rect class="lane" x="245" y="30" width="645" height="520" rx="10"/>
+      <text class="lane-title" x="260" y="52">kind cluster · agent-runtime · Kubernetes 1.37</text>
+      <rect class="lane" x="905" y="30" width="185" height="520" rx="10"/>
+      <text class="lane-title" x="920" y="52">Internet</text>
+
+      <rect class="box" x="30" y="70" width="170" height="48" rx="7"/>
+      <text class="t" x="44" y="91">Browser</text><text class="s" x="44" y="107">this page</text>
+      <rect class="box hl" x="30" y="165" width="170" height="95" rx="7"/>
+      <text class="t" x="44" y="186">Demo UI · :8790</text>
+      <text class="s" x="44" y="204">FastAPI on the host</text>
+      <text class="s" x="44" y="220">kubectl · load generator</text>
+      <text class="s" x="44" y="236">Jaeger + metrics reader</text>
+      <rect class="box" x="30" y="330" width="170" height="110" rx="7"/>
+      <text class="t" x="44" y="351">Port mappings</text>
+      <text class="s" x="44" y="370">:18080 → NodePort 30080</text>
+      <text class="s" x="44" y="387">:16687 → Jaeger UI</text>
+      <text class="s" x="44" y="404">:8889 → collector metrics</text>
+      <text class="s" x="44" y="421">(kind extraPortMappings)</text>
+
+      <rect class="box" x="270" y="62" width="605" height="78" rx="7"/>
+      <text class="t" x="284" y="84">control-plane node</text>
+      <text class="s" x="284" y="102">kube-apiserver · scheduler · controller-manager (ReplicaSet, HPA, endpoints)</text>
+      <text class="s" x="284" y="119">metrics-server (kube-system): pod CPU every 15s → HPA · tainted NoSchedule for workloads</text>
+
+      <rect class="ns" x="270" y="160" width="400" height="375" rx="8"/>
+      <text class="s" x="282" y="178">namespace agent · PSA restricted · default-deny NetworkPolicy</text>
+      <rect class="box hl" x="290" y="190" width="365" height="44" rx="7"/>
+      <text class="t" x="304" y="210">Service agent-api</text><text class="s" x="304" y="226">:80 → :8000 · NodePort 30080 · Ready endpoints only</text>
+
+      <rect class="box" x="285" y="250" width="180" height="170" rx="7" style="fill:var(--soft)"/>
+      <text class="s" x="297" y="268">worker</text>
+      <rect class="box" x="297" y="280" width="156" height="60" rx="6"/>
+      <text class="t" x="307" y="298">agent-api pod</text><text class="s" x="307" y="314">uvicorn · agent · tools</text><text class="s" x="307" y="330">startup · ready · live</text>
+      <rect class="box dash" x="297" y="350" width="156" height="58" rx="6"/>
+      <text class="s" x="307" y="374">+ pods added by HPA</text><text class="s" x="307" y="390">spread across nodes</text>
+      <rect class="box" x="480" y="250" width="175" height="170" rx="7" style="fill:var(--soft)"/>
+      <text class="s" x="492" y="268">worker2</text>
+      <rect class="box" x="492" y="280" width="151" height="60" rx="6"/>
+      <text class="t" x="502" y="298">agent-api pod</text><text class="s" x="502" y="314">non-root · read-only fs</text><text class="s" x="502" y="330">secrets as files</text>
+      <rect class="box dash" x="492" y="350" width="151" height="58" rx="6"/>
+      <text class="s" x="502" y="374">+ pods added by HPA</text><text class="s" x="502" y="390">2 → 8 replicas</text>
+
+      <rect class="chip" x="290" y="435" width="118" height="36" rx="5"/><text class="s" x="298" y="450">HPA 2–8 pods</text><text class="s" x="298" y="464">at 60% CPU</text>
+      <rect class="chip" x="414" y="435" width="118" height="36" rx="5"/><text class="s" x="422" y="450">PDB</text><text class="s" x="422" y="464">minAvailable 1</text>
+      <rect class="chip" x="538" y="435" width="117" height="36" rx="5"/><text class="s" x="546" y="450">Secret agent-secrets</text><text class="s" x="546" y="464">mounted as files</text>
+      <rect class="chip" x="290" y="478" width="180" height="36" rx="5"/><text class="s" x="298" y="493">ConfigMap agent-config</text><text class="s" x="298" y="507">hash suffix → rollout on change</text>
+      <rect class="chip" x="476" y="478" width="179" height="36" rx="5"/><text class="s" x="484" y="493">ServiceAccount agent-api</text><text class="s" x="484" y="507">no API token mounted</text>
+
+      <rect class="ns" x="690" y="160" width="190" height="250" rx="8"/>
+      <text class="s" x="702" y="178">namespace observability</text>
+      <rect class="box hl" x="705" y="192" width="160" height="88" rx="7"/>
+      <text class="t" x="717" y="212">OTel Collector</text><text class="s" x="717" y="229">OTLP :4318 in</text><text class="s" x="717" y="245">scrapes pod /metrics</text><text class="s" x="717" y="261">exports :8889 + Jaeger</text>
+      <rect class="box" x="705" y="318" width="160" height="70" rx="7"/>
+      <text class="t" x="717" y="338">Jaeger</text><text class="s" x="717" y="355">trace store + UI</text><text class="s" x="717" y="371">in-memory</text>
+
+      <rect class="box" x="918" y="420" width="160" height="70" rx="7"/>
+      <text class="t" x="930" y="441">Groq API</text><text class="s" x="930" y="458">gpt-oss-20b</text><text class="s" x="930" y="474">key from the Secret</text>
+
+      <path class="edge" d="M115 118 L115 163"/><text class="el" x="121" y="145">:8790</text>
+      <path class="edge" d="M115 260 L115 328"/><text class="el" x="121" y="298">chat + load</text>
+      <path class="edge acc" d="M200 385 L250 385 L250 212 L288 212"/>
+      <path class="edge dash" d="M200 185 L238 185 L238 100 L268 100"/>
+      <text class="el" x="244" y="153">kubectl</text>
+      <path class="edge acc" d="M375 234 L375 278"/>
+      <path class="edge acc" d="M567 234 L567 278"/>
+      <path class="edge" d="M643 300 L680 300 L680 236 L703 236"/><text class="el" x="696" y="303">OTLP spans</text>
+      <path class="edge" d="M785 280 L785 316"/><text class="el" x="791" y="302">traces</text>
+      <path class="edge" d="M643 322 L676 322 L676 455 L916 455"/><text class="el" x="700" y="448">HTTPS :443 egress only</text>
+    </svg>
+  </div>
+
+  <div class="card">
+    <h2>Request flow</h2>
+    <p class="hint">One <span class="mono">POST /v1/chat</span>, from the client to the answer and its trace.</p>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><b>Client → NodePort</b><span class="muted">localhost:18080 → node :30080. kube-proxy picks a Ready endpoint <i>per connection</i>.</span></div>
+      <div class="step"><span class="n">2</span><b>Middleware</b><span class="muted">Server span, in-flight gauge, request counter, <span class="mono">x-served-by</span> header.</span></div>
+      <div class="step"><span class="n">3</span><b>Auth</b><span class="muted">Bearer token checked against the mounted Secret file (current or previous).</span></div>
+      <div class="step"><span class="n">4</span><b>Agent</b><span class="muted"><span class="mono">invoke_agent</span> → <span class="mono">chat</span> (Groq or scripted) → <span class="mono">execute_tool</span> spans; loop up to 4 steps.</span></div>
+      <div class="step"><span class="n">5</span><b>Answer</b><span class="muted">JSON with tools used, token usage, pod, node and trace id.</span></div>
+      <div class="step"><span class="n">6</span><b>Telemetry</b><span class="muted">Spans batch to the collector → Jaeger. The collector scrapes <span class="mono">/metrics</span> every 5s.</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Autoscaling loop</h2>
+    <p class="hint">Why a scale-out takes about 30–45 seconds end to end, and why scale-in is slower on purpose.</p>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><b>Load rises</b><span class="muted"><span class="mono">risk_score</span> burns CPU on each request.</span></div>
+      <div class="step"><span class="n">2</span><b>metrics-server</b><span class="muted">Reads kubelet CPU every 15s.</span></div>
+      <div class="step"><span class="n">3</span><b>HPA</b><span class="muted">Every 15s: desired = ceil(current × CPU% ÷ 60%), at most +100% or +3 pods per 15s.</span></div>
+      <div class="step"><span class="n">4</span><b>Schedule</b><span class="muted">New pods spread across nodes (topology spread on hostname).</span></div>
+      <div class="step"><span class="n">5</span><b>Gate on probes</b><span class="muted">Startup (~4s warm-up), then readiness adds the pod to the Service.</span></div>
+      <div class="step"><span class="n">6</span><b>Scale in</b><span class="muted">After 60s below target: remove 1 pod per 30s. preStop + drain keep requests whole.</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Health and self-healing</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Signal</th><th>Probe / mechanism</th><th>What Kubernetes does</th><th>Try it in the Live run tab</th></tr></thead>
+      <tbody>
+        <tr><td>Still warming up</td><td><span class="mono">startupProbe /startupz</span> every 2s, up to 60s</td><td>Holds the other probes off; pod is not Ready</td><td>Any new pod (watch "Starting")</td></tr>
+        <tr><td>Cannot take traffic</td><td><span class="mono">readinessProbe /readyz</span> every 3s, 2 failures</td><td>Removes the pod from Service endpoints; no restart</td><td>Select a pod → Fail readiness</td></tr>
+        <tr><td>Wedged process</td><td><span class="mono">livenessProbe /livez</span> every 5s, 3 failures</td><td>Kubelet restarts the container (restart count +1)</td><td>Select a pod → Fail liveness</td></tr>
+        <tr><td>Pod lost</td><td>ReplicaSet controller</td><td>Creates a replacement on any schedulable node</td><td>Select a pod → Delete</td></tr>
+        <tr><td>Node maintenance</td><td>Eviction API + PodDisruptionBudget</td><td>Evicts pods only while one stays available</td><td>Drain node</td></tr>
+        <tr><td>Shutdown</td><td><span class="mono">preStop sleep 5s</span> → SIGTERM → 15s drain</td><td>In-flight requests finish before the pod exits</td><td>Rolling update under load</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Readiness never checks the LLM provider</h3>
+    <p class="hint" style="margin:0">If Groq is down every pod would fail readiness together and the Service would have no endpoints. Upstream errors return 502 per request instead.</p>
+  </div>
+
+  <div class="card">
+    <h2>Secret rotation without restarts</h2>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><b>Write</b><span class="muted">Secret gets <span class="mono">api-token</span>=NEW and <span class="mono">api-token-previous</span>=OLD.</span></div>
+      <div class="step"><span class="n">2</span><b>Kubelet sync</b><span class="muted">Each pod's mounted files are swapped atomically, usually within ~60s.</span></div>
+      <div class="step"><span class="n">3</span><b>Hot reload</b><span class="muted">The app re-reads the file when its mtime changes and accepts both tokens.</span></div>
+      <div class="step"><span class="n">4</span><b>Switch clients</b><span class="muted">Once every pod reports NEW's fingerprint, clients move to NEW. Zero 401s.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ PROD -->
+<section class="tab" id="tab-prod">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h2>Equivalent production deployment</h2>
+        <p class="hint" style="margin:0">Same <span class="mono">k8s/base</span>; the cloud overlay swaps how traffic enters, where secrets and identity come from, and where telemetry goes.</p>
+      </div>
+      <div class="seg" id="cloud-seg"><button data-cloud="eks" class="on">AWS EKS</button><button data-cloud="gke">Google GKE</button></div>
+    </div>
+    <svg class="diagram" id="prod-svg" viewBox="0 0 1100 600" role="img" aria-label="Production deployment" style="margin-top:12px"></svg>
+  </div>
+  <div class="card">
+    <h2>Local to production mapping</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Concern</th><th>Local (kind)</th><th>AWS EKS</th><th>Google GKE</th></tr></thead>
+      <tbody id="map-rows"></tbody>
+    </table></div>
+    <p class="hint" style="margin:10px 0 0">The overlays in <span class="mono">k8s/overlays/eks</span> and <span class="mono">k8s/overlays/gke</span> render with <span class="mono">kubectl kustomize</span>; account ids, ARNs and project ids are placeholders.</p>
+  </div>
+</section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const api = async (path, opts = {}) => {
+  const r = await fetch(path, {headers: {"content-type": "application/json"}, ...opts});
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || r.statusText);
+  return body;
+};
+const fmtTime = t => new Date(t * 1000).toLocaleTimeString([], {hour12: false});
+const short = name => name ? name.replace(/^agent-api-[a-z0-9]+-/, "…") : "-";
+
+$$("nav button").forEach(b => b.onclick = () => {
+  $$("nav button").forEach(x => x.classList.toggle("active", x === b));
+  $$("section.tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "run") renderCharts();
+});
+
+// ------------------------------------------------------------ state polling
+let S = {}, selected = null;
+async function poll() {
+  try {
+    S = await api("/api/state");
+    $("#banner").style.display = S.error ? "block" : "none";
+    if (S.error) $("#banner").textContent = "Cluster not reachable: " + S.error + "  (run scripts/up.sh)";
+    renderTiles(); renderNodes(); renderLoad(); renderFeed(); renderRotation(); renderCharts();
+    $("#jaeger-link").href = S.links.jaeger;
+  } catch (e) {
+    $("#banner").style.display = "block"; $("#banner").textContent = "UI server not reachable: " + e.message;
+  }
+}
+
+function renderTiles() {
+  const h = S.hpa || {}, l = S.load || {}, pods = S.pods || [];
+  const ready = pods.filter(p => p.phase === "Ready").length;
+  $("#t-ready").textContent = `${ready} / ${pods.length}`;
+  $("#t-ready-d").textContent = `HPA desired ${h.desired ?? "-"} · range ${h.min}–${h.max}`;
+  $("#t-cpu").textContent = h.cpu_pct == null ? "-" : h.cpu_pct + "%";
+  $("#t-cpu-d").textContent = `target ${h.target_pct}% of 200m request`;
+  $("#t-rps").textContent = l.rps ? l.rps + "/s" : "0/s";
+  $("#t-rps-d").textContent = l.running ? `target ${l.target_rps}/s · ${l.remaining_s}s left` : "load off";
+  $("#t-p95").textContent = l.p95_ms == null ? "-" : l.p95_ms + " ms";
+  $("#t-p95-d").textContent = l.p50_ms == null ? " " : `p50 ${l.p50_ms} ms`;
+  $("#t-err").textContent = ((l.error_rate || 0) * 100).toFixed(1) + "%";
+  const errs = Object.entries(l.errors || {}).map(([k, v]) => `${k}×${v}`).join(" ");
+  $("#t-err-d").textContent = errs || ("total ok " + ((l.total || {})["200"] || 0));
+  $("#t-err").style.color = l.error_rate > 0 ? "var(--bad)" : "";
+}
+
+function renderNodes() {
+  const nodes = (S.nodes || []).slice().sort((a, b) => (a.role === "worker" ? 0 : 1) - (b.role === "worker" ? 0 : 1) || a.name.localeCompare(b.name));
+  const pods = S.pods || [];
+  if (selected && !pods.some(p => p.name === selected)) selected = null;
+  $("#nodes").innerHTML = nodes.map(n => {
+    const mine = pods.filter(p => p.node === n.name);
+    const tag = n.role === "control-plane" ? "control plane · NoSchedule" : (!n.schedulable ? "cordoned" : (n.ready ? "Ready" : "NotReady"));
+    return `<div class="node ${n.schedulable ? "" : "cordoned"}">
+      <div class="nh"><span>${esc(n.name.replace("agent-runtime-", ""))}</span><span class="tag">${tag}</span></div>
+      ${mine.map(p => `<button class="pod ${p.phase} ${p.name === selected ? "sel" : ""}" data-pod="${esc(p.name)}">
+        <div class="pn">${esc(short(p.name))}</div>
+        <div class="pm"><span class="st ${p.phase}">${p.phase}</span>
+          <span>${p.cpu_m == null ? "-" : p.cpu_m + "m"} CPU</span>
+          ${p.restarts ? `<span class="restarts">↻ ${p.restarts}</span>` : ""}
+          ${p.reason ? `<span>${esc(p.reason)}</span>` : ""}</div>
+      </button>`).join("") || `<div class="muted" style="font-size:12px">${n.role === "worker" ? "no agent pods" : "system pods only"}</div>`}
+    </div>`;
+  }).join("");
+  pods.filter(p => !p.node).forEach(p => $("#nodes").insertAdjacentHTML("beforeend", `<div class="muted" style="font-size:12px">Pending: ${esc(short(p.name))}</div>`));
+  $$("#nodes .pod").forEach(b => b.onclick = () => { selected = b.dataset.pod; renderNodes(); });
+  const p = pods.find(x => x.name === selected);
+  $("#selbar").innerHTML = p ? `<div class="row"><span class="mono">${esc(p.name)}</span><span class="muted">${esc(p.node)} · ${esc(p.ip || "")}</span></div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn danger" data-act="delete">Delete pod</button>
+      <button class="btn danger" data-act="unready">Fail readiness</button>
+      <button class="btn danger" data-act="unhealthy">Fail liveness</button>
+      <button class="btn" data-act="none">Clear fault</button>
+    </div>` : "No pod selected. Click a pod above.";
+  $$("#selbar button").forEach(b => b.onclick = () => act(b, async () => {
+    if (b.dataset.act === "delete") await api(`/api/pods/${p.name}/delete`, {method: "POST"});
+    else await api(`/api/pods/${p.name}/fault`, {method: "POST", body: JSON.stringify({mode: b.dataset.act})});
+  }));
+}
+
+async function act(btn, fn) {
+  btn.disabled = true;
+  try { await fn(); } catch (e) { alert(e.message); } finally { btn.disabled = false; poll(); }
+}
+
+function renderLoad() {
+  const l = S.load || {};
+  $$("#rps-seg button").forEach(b => b.classList.toggle("on", l.running ? +b.dataset.rps === l.target_rps : b.dataset.rps === "0"));
+  $("#load-status").textContent = l.running ? `Sending ${l.target_rps} req/s · ${l.remaining_s}s left · achieved ${l.rps}/s` : "Idle.";
+  const entries = Object.entries(l.by_pod || {}).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...entries.map(e => e[1]));
+  $("#by-pod").innerHTML = entries.length ? entries.map(([pod, n]) =>
+    `<div class="barrow"><span class="mono">${esc(short(pod))}</span><div class="bar" style="width:${(n / max * 100).toFixed(1)}%"></div><span style="text-align:right">${n}</span></div>`).join("")
+    : "No traffic.";
+}
+$$("#rps-seg button").forEach(b => b.onclick = () => act(b, async () => {
+  const rps = +b.dataset.rps;
+  if (rps === 0) await api("/api/load", {method: "DELETE"});
+  else await api("/api/load", {method: "POST", body: JSON.stringify({rps, duration_s: +$("#dur").value})});
+}));
+
+function renderFeed() {
+  $("#feed").innerHTML = (S.activity || []).map(a => `<div><span class="muted mono">${fmtTime(a.t)}</span>
+    <span><span class="badge ${a.kind}">${a.source === "kubernetes" ? "k8s" : a.kind}</span></span><span>${esc(a.text)}</span></div>`).join("")
+    || `<div class="muted" style="display:block">Nothing yet. Start load or break a pod.</div>`;
+}
+
+function renderRotation() {
+  const r = S.rotation;
+  if (!r) { $("#rotation").innerHTML = `<span class="muted">Client token <span class="mono">${esc(S.client_token_fp || "-")}</span></span>`; return; }
+  const pct = r.pods_total ? r.pods_on_new / r.pods_total * 100 : 0;
+  const elapsed = r.seconds ?? Math.round(Date.now() / 1000 - r.started);
+  $("#rotation").innerHTML = `Rotation <span class="mono">${esc(r.old_fp)} → ${esc(r.new_fp)}</span>: <b>${esc(r.state)}</b> ·
+    ${r.pods_on_new}/${r.pods_total} pods on new token · ${elapsed}s
+    <div class="progress"><div style="width:${pct}%"></div></div>
+    <div class="muted" style="margin-top:4px">Client is sending <span class="mono">${esc(S.client_token_fp)}</span>.</div>`;
+}
+
+$("#b-roll").onclick = e => act(e.target, () => api("/api/rollout", {method: "POST"}));
+$("#b-rot").onclick = e => act(e.target, () => api("/api/rotate", {method: "POST"}));
+$("#b-drain").onclick = e => act(e.target, () => api(`/api/nodes/${$("#drain-node").value}/drain`, {method: "POST"}));
+$("#b-uncordon").onclick = e => act(e.target, () => api(`/api/nodes/${$("#drain-node").value}/uncordon`, {method: "POST"}));
+
+// ------------------------------------------------------------ charts (small multiples, shared time axis, synced hover)
+const CHARTS = [
+  {id: "c-rep", title: "Replicas", series: [{k: "ready", label: "Ready", color: "var(--s1)"}, {k: "desired", label: "HPA desired", color: "var(--s2)", dash: "5 4"}], fmt: v => v, floor: 10},
+  {id: "c-cpu", title: "CPU, % of request", series: [{k: "cpu_pct", label: "CPU", color: "var(--s3)"}], fmt: v => v + "%", ref: () => S.hpa?.target_pct, refLabel: "target", floor: 100},
+  {id: "c-rps", title: "Requests / s", series: [{k: "rps", label: "Throughput", color: "var(--s1)"}], fmt: v => v + "/s", floor: 10},
+];
+let hoverT = null;
+function renderCharts() {
+  const hist = S.history || [];
+  if (!hist.length || !$("#tab-run").classList.contains("active")) return;
+  const t1 = hist[hist.length - 1].t, t0 = Math.max(hist[0].t, t1 - 600) ;
+  const pts = hist.filter(h => h.t >= t0);
+  CHARTS.forEach(c => {
+    const el = $("#" + c.id), W = el.clientWidth || 500, H = 92, L = 34, R = 8, T = 6, B = 16;
+    const ref = c.ref ? c.ref() : null;
+    const vmax = Math.max(c.floor, ref || 0, ...pts.flatMap(p => c.series.map(s => p[s.k] ?? 0))) * 1.1;
+    const x = t => L + (t - t0) / Math.max(1, t1 - t0) * (W - L - R), y = v => T + (1 - v / vmax) * (H - T - B);
+    const last = pts[pts.length - 1];
+    const head = c.series.length > 1
+      ? `<span class="legend">${c.series.map(s => `<span><i style="background:${s.color};${s.dash ? "height:0;border-top:2px dashed " + s.color : ""}"></i>${s.label} <b>${last[s.k] ?? "-"}</b></span>`).join("")}</span>`
+      : `<b>${last[c.series[0].k] == null ? "-" : c.fmt(last[c.series[0].k])}</b>`;
+    const grid = [0, .5, 1].map(f => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(vmax / 1.1 * f)}" y2="${y(vmax / 1.1 * f)}"/>
+      <text class="axis" x="${L - 4}" y="${y(vmax / 1.1 * f) + 3}" text-anchor="end">${Math.round(vmax / 1.1 * f)}</text>`).join("");
+    const lines = c.series.map(s => {
+      let d = "", pen = false;
+      pts.forEach(p => { const v = p[s.k]; if (v == null) { pen = false; return; } d += (pen ? "L" : "M") + x(p.t).toFixed(1) + " " + y(v).toFixed(1); pen = true; });
+      return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}/>`;
+    }).join("");
+    const refLine = ref ? `<line class="ref" x1="${L}" x2="${W - R}" y1="${y(ref)}" y2="${y(ref)}"/><text class="axis" x="${W - R}" y="${y(ref) - 3}" text-anchor="end">${c.refLabel} ${ref}%</text>` : "";
+    const ticks = [t0, (t0 + t1) / 2, t1].map((t, i) => `<text class="axis" x="${x(t)}" y="${H - 2}" text-anchor="${["start", "middle", "end"][i]}">${fmtTime(t)}</text>`).join("");
+    let hov = "";
+    if (hoverT != null) {
+      const p = pts.reduce((a, b) => Math.abs(b.t - hoverT) < Math.abs(a.t - hoverT) ? b : a);
+      hov = `<line class="xh" x1="${x(p.t)}" x2="${x(p.t)}" y1="${T}" y2="${H - B}"/>` + c.series.map(s => p[s.k] == null ? "" :
+        `<circle cx="${x(p.t)}" cy="${y(p[s.k])}" r="4" fill="${s.color}" stroke="var(--panel)" stroke-width="2"/>`).join("");
+    }
+    el.innerHTML = `<div class="ct"><span>${c.title}</span>${head}</div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${grid}${refLine}${lines}${ticks}${hov}
+      <rect x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent" data-hit="1"/></svg>`;
+    const hit = $("rect[data-hit]", el);
+    hit.onmousemove = ev => {
+      const r = hit.getBoundingClientRect();
+      hoverT = t0 + (ev.clientX - r.left) / r.width * (t1 - t0);
+      const p = pts.reduce((a, b) => Math.abs(b.t - hoverT) < Math.abs(a.t - hoverT) ? b : a);
+      const tip = $("#tip");
+      tip.innerHTML = `<b>${fmtTime(p.t)}</b><br>Ready ${p.ready} · desired ${p.desired}<br>CPU ${p.cpu_pct ?? "-"}%<br>${p.rps}/s · p95 ${p.p95 ?? "-"} ms · err ${(p.err * 100).toFixed(1)}%`;
+      tip.style.display = "block"; tip.style.left = Math.min(ev.clientX + 14, innerWidth - 200) + "px"; tip.style.top = ev.clientY + 12 + "px";
+      renderCharts();
+    };
+    hit.onmouseleave = () => { hoverT = null; $("#tip").style.display = "none"; renderCharts(); };
+  });
+}
+addEventListener("resize", renderCharts);
+
+// ------------------------------------------------------------ chat
+$$(".ex").forEach(a => a.onclick = e => { e.preventDefault(); $("#msg").value = a.textContent; });
+$("#b-send").onclick = e => act(e.target, async () => {
+  $("#answer").innerHTML = `<div class="answer muted">Thinking…</div>`;
+  const r = await api("/api/chat", {method: "POST", body: JSON.stringify({message: $("#msg").value, backend: $("#backend").value})});
+  const b = r.body;
+  if (r.status !== 200) { $("#answer").innerHTML = `<div class="answer" style="color:var(--bad)">${r.status}: ${esc(b.detail)}</div>`; return; }
+  const md = esc(b.answer).replace(/【[^】]*】/g, "").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  $("#answer").innerHTML = `<div class="answer">${md}
+    <div class="chips" style="margin-top:8px">${b.tools.map(t => `<span>${esc(t)}</span>`).join("") || '<span>no tools</span>'}</div>
+    <div class="muted" style="font-size:12px;margin-top:6px">${esc(b.model)} · ${b.usage.input_tokens}+${b.usage.output_tokens} tokens · agent ${b.agent_ms} ms · round trip ${r.latency_ms} ms<br>
+    served by <span class="mono">${esc(r.served_by)}</span> on ${esc(r.node)} · <a target="_blank" href="${S.links?.jaeger}/trace/${b.trace_id}">trace ${b.trace_id.slice(0, 12)}…</a></div></div>`;
+  setTimeout(loadTraces, 2500);
+});
+api("/api/info").then(i => {
+  $("#backend").innerHTML = i.backends.map(b => `<option ${b === "groq" ? "selected" : ""}>${b}</option>`).join("");
+}).catch(() => { $("#backend").innerHTML = "<option>scripted</option>"; });
+
+async function loadTraces() {
+  try {
+    const {traces, error} = await api("/api/traces?limit=8");
+    $("#traces").innerHTML = error ? `<tr><td colspan="5" class="muted">${esc(error)}</td></tr>` : traces.map(t => `<tr>
+      <td class="mono">${new Date(t.start / 1e6).toLocaleTimeString([], {hour12: false})}</td>
+      <td class="nw"><a href="${t.url}" target="_blank">${esc(t.root)}</a></td><td>${t.ms}</td>
+      <td class="mono nw">${esc(short(t.pod))}</td>
+      <td class="mono" style="font-size:11.5px">${esc(t.spans.filter(s => s !== t.root && !s.startsWith("fastapi.")).map(s => s.replace(/^(invoke_agent|execute_tool|chat) /, "")).join(" → ") || "-")}</td></tr>`).join("")
+      || `<tr><td colspan="5" class="muted">No traces yet. Send a chat.</td></tr>`;
+  } catch {}
+}
+
+// ------------------------------------------------------------ production diagram
+const CLOUD = {
+  eks: {
+    lane: "AWS region · VPC · 3 AZs (private subnets)", dns: ["Route 53", "alias → load balancer"],
+    lb: ["Application LB", "AWS WAF attached", "TLS cert from ACM", "AWS LB Controller", "target-type ip"],
+    cp: "EKS control plane (AWS-managed, multi-AZ) · access entries + RBAC", az: ["AZ a", "AZ b", "AZ c"],
+    node: "Karpenter node", addons: ["AWS LB Controller · External Secrets · ADOT Collector", "Karpenter · metrics-server · KEDA (optional)"],
+    nat: "NAT Gateway per AZ → fixed egress IPs for the model provider",
+    svc: [["ECR", "immutable tags · image scan"], ["Secrets Manager", "KMS · synced by ESO"], ["IAM (Pod Identity)", "one role per ServiceAccount"],
+          ["X-Ray · AMP · CloudWatch", "traces · metrics · logs"], ["Groq / Amazon Bedrock", "HTTPS via NAT or endpoint"]],
+    edges: ["pull", "sync", "role", "OTLP", "HTTPS"],
+    ci: ["CI builds, scans, signs", "Argo CD syncs", "k8s/overlays/eks"],
+  },
+  gke: {
+    lane: "GCP region · VPC · 3 zones (private nodes)", dns: ["Cloud DNS", "A record → LB address"],
+    lb: ["External App LB", "Cloud Armor policy", "Google-managed cert", "GKE Gateway", "NEGs → pod IPs"],
+    cp: "GKE regional control plane (Google-managed) · IAM + RBAC", az: ["zone a", "zone b", "zone c"],
+    node: "Autopilot / NAP node", addons: ["GKE Gateway controller (managed) · External Secrets", "Managed Prometheus + OTel · KEDA (optional)"],
+    nat: "Cloud NAT → fixed egress IPs for the model provider",
+    svc: [["Artifact Registry", "scan · Binary Authorization"], ["Secret Manager", "CMEK · synced by ESO"], ["IAM (Workload Identity)", "KSA → IAM principal"],
+          ["Cloud Trace · Monitoring", "traces · metrics · logs"], ["Groq / Vertex AI", "HTTPS via Cloud NAT"]],
+    edges: ["pull", "sync", "WIF", "OTLP", "HTTPS"],
+    ci: ["Cloud Build, scan, sign", "Argo CD / Config Sync", "k8s/overlays/gke"],
+  },
+};
+function renderProd(cloud) {
+  const c = CLOUD[cloud];
+  const svcY = [70, 160, 250, 340, 430];
+  const az = c.az.map((name, i) => {
+    const x = 385 + i * 148;
+    const pods = i === 2 ? [0] : [0, 1];
+    return `<rect class="box" x="${x}" y="135" width="138" height="215" rx="7" style="fill:var(--soft)"/>
+      <text class="s" x="${x + 10}" y="153">${name}</text>
+      <rect class="box" x="${x + 8}" y="162" width="122" height="176" rx="6"/>
+      <text class="s" x="${x + 16}" y="180">${c.node}</text>
+      ${pods.map(j => `<rect class="box hl" x="${x + 16}" y="${190 + j * 50}" width="106" height="40" rx="5"/>
+        <text class="t" x="${x + 24}" y="${207 + j * 50}" style="font-size:11.5px">agent-api</text><text class="s" x="${x + 24}" y="${222 + j * 50}">probes · PDB</text>`).join("")}
+      ${i === 2 ? `<rect class="box dash" x="${x + 16}" y="240" width="106" height="40" rx="5"/><text class="s" x="${x + 24}" y="264">+ HPA pods</text>` : ""}
+      <text class="s" x="${x + 16}" y="${i === 2 ? 304 : 304}">spread by zone</text>`;
+  }).join("");
+  $("#prod-svg").innerHTML = `
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+    </defs>
+    <rect class="lane" x="10" y="20" width="150" height="565" rx="10"/><text class="lane-title" x="22" y="42">Clients</text>
+    <rect class="lane" x="172" y="20" width="178" height="565" rx="10"/><text class="lane-title" x="184" y="42">Edge</text>
+    <rect class="lane" x="360" y="20" width="490" height="565" rx="10"/><text class="lane-title" x="372" y="42">${c.lane}</text>
+    <rect class="lane" x="865" y="20" width="225" height="565" rx="10"/><text class="lane-title" x="877" y="42">Managed services</text>
+
+    <rect class="box" x="20" y="70" width="130" height="54" rx="7"/><text class="t" x="32" y="92">Apps / users</text><text class="s" x="32" y="110">HTTPS + bearer/OIDC</text>
+    <rect class="box" x="20" y="430" width="130" height="80" rx="7"/><text class="t" x="32" y="452">Delivery</text>
+    ${c.ci.map((l, i) => `<text class="s" x="32" y="${470 + i * 15}">${l}</text>`).join("")}
+
+    <rect class="box" x="184" y="70" width="154" height="54" rx="7"/><text class="t" x="196" y="92">${c.dns[0]}</text><text class="s" x="196" y="110">${c.dns[1]}</text>
+    <rect class="box hl" x="184" y="160" width="154" height="110" rx="7"/><text class="t" x="196" y="181">${c.lb[0]}</text>
+    ${c.lb.slice(1).map((l, i) => `<text class="s" x="196" y="${199 + i * 16}">${l}</text>`).join("")}
+
+    <rect class="box" x="375" y="62" width="460" height="54" rx="7"/><text class="t" x="389" y="84">Control plane</text><text class="s" x="389" y="102">${c.cp}</text>
+    ${az}
+    <rect class="box" x="375" y="370" width="460" height="62" rx="7"/><text class="t" x="389" y="390">Platform add-ons</text>
+    <text class="s" x="389" y="407">${c.addons[0]}</text><text class="s" x="389" y="422">${c.addons[1]}</text>
+    <rect class="box" x="375" y="450" width="460" height="46" rx="7"/><text class="t" x="389" y="470">Egress</text><text class="s" x="389" y="486">${c.nat}</text>
+    <rect class="box" x="375" y="514" width="460" height="56" rx="7"/><text class="t" x="389" y="534">Same base manifests</text>
+    <text class="s" x="389" y="551">Deployment · HPA · PDB · NetworkPolicy · probes · non-root · read-only FS</text>
+
+    ${c.svc.map(([a, b], i) => `<rect class="box" x="877" y="${svcY[i]}" width="203" height="56" rx="7"/>
+      <text class="t" x="889" y="${svcY[i] + 22}" style="font-size:12px">${a}</text><text class="s" x="889" y="${svcY[i] + 40}">${b}</text>
+      <path class="edge" d="M837 ${svcY[i] + 28} L875 ${svcY[i] + 28}"/><text class="el" x="856" y="${svcY[i] + 22}" text-anchor="middle">${c.edges[i]}</text>`).join("")}
+
+    <path class="edge acc" d="M150 97 L182 97"/><text class="el" x="166" y="90" text-anchor="middle">DNS</text>
+    <path class="edge acc" d="M85 124 L85 215 L182 215"/><text class="el" x="92" y="208">HTTPS</text>
+    <path class="edge acc" d="M338 215 L392 215"/><text class="el" x="342" y="232">pod IPs</text>
+    <path class="edge dash" d="M150 470 L355 470 L355 89 L373 89"/><text class="el" x="190" y="463">GitOps sync</text>`;
+}
+const MAP = [
+  ["Cluster", "kind: 1 control plane + 2 workers", "EKS, managed control plane, 3 AZs", "GKE regional (or Autopilot), 3 zones"],
+  ["Nodes / node scaling", "fixed Docker containers", "Karpenter NodePools (spot + on-demand)", "Autopilot or node auto-provisioning"],
+  ["Pod scaling", "HPA on CPU, 2–8", "HPA on CPU (+ KEDA on queue depth / RPS)", "HPA on CPU (+ KEDA, or custom metrics)"],
+  ["Ingress", "NodePort 30080 → localhost:18080", "ALB via AWS LB Controller, target-type ip, ACM TLS, WAF", "Gateway API / Ingress, container-native NEGs, managed cert, Cloud Armor"],
+  ["Image", "docker build + kind load", "ECR, immutable tags, scan, signed", "Artifact Registry, Binary Authorization"],
+  ["Secrets", "Secret created by up.sh from env", "Secrets Manager → External Secrets Operator (KMS)", "Secret Manager → External Secrets Operator (CMEK)"],
+  ["Workload identity", "ServiceAccount, no token", "EKS Pod Identity / IRSA → IAM role", "Workload Identity Federation → IAM"],
+  ["Traces", "OTel Collector → Jaeger", "ADOT Collector → AWS X-Ray", "OTel Collector → Cloud Trace"],
+  ["Metrics", "Collector scrapes pods → :8889", "ADOT → Amazon Managed Prometheus + Grafana", "Google Managed Prometheus (PodMonitoring)"],
+  ["Logs", "kubectl logs (JSON)", "Fluent Bit → CloudWatch Logs", "Cloud Logging (built in)"],
+  ["Network policy", "kindnet NetworkPolicy", "VPC CNI network policies (or Cilium)", "Dataplane V2 (Cilium)"],
+  ["Model egress", "direct HTTPS from the node", "NAT Gateway (fixed IPs) or Bedrock VPC endpoint", "Cloud NAT or Vertex AI Private Service Connect"],
+  ["Delivery", "scripts/up.sh", "CI → ECR, Argo CD syncs k8s/overlays/eks", "Cloud Build → AR, Argo CD / Config Sync syncs k8s/overlays/gke"],
+];
+$("#map-rows").innerHTML = MAP.map(r => `<tr>${r.map((c, i) => i ? `<td>${esc(c)}</td>` : `<td><b>${esc(c)}</b></td>`).join("")}</tr>`).join("");
+$$("#cloud-seg button").forEach(b => b.onclick = () => {
+  $$("#cloud-seg button").forEach(x => x.classList.toggle("on", x === b)); renderProd(b.dataset.cloud);
+});
+renderProd("eks");
+
+poll(); setInterval(poll, 2000);
+loadTraces(); setInterval(loadTraces, 6000);
+</script>
+</body>
+</html>

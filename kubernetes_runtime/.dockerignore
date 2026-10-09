@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+tests
+ui
+k8s
+docs
+scripts
+*.md
+*.txt

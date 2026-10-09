@@ -1,0 +1,12 @@
+# metrics-server feeds CPU/memory to the HPA and `kubectl top`. kind's kubelets use
+# self-signed serving certs, hence --kubelet-insecure-tls (managed clusters ship metrics-server).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml
+patches:
+  - target: {kind: Deployment, name: metrics-server}
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --kubelet-insecure-tls

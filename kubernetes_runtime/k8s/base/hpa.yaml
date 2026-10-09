@@ -1,0 +1,24 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agent-api
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: agent-api}
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 60}   # % of the 200m request
+  behavior:
+    scaleUp:                 # react fast: double, or add 3 pods, every 15s
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies:
+        - {type: Percent, value: 100, periodSeconds: 15}
+        - {type: Pods, value: 3, periodSeconds: 15}
+    scaleDown:               # back off slowly: 1 pod per 30s after 60s of low load
+      stabilizationWindowSeconds: 60
+      policies:
+        - {type: Pods, value: 1, periodSeconds: 30}

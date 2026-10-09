@@ -1,0 +1,34 @@
+# Default deny for the namespace, then allow exactly what the agent needs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-api
+spec:
+  podSelector:
+    matchLabels: {app: agent-api}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports: [{port: 8000, protocol: TCP}]   # Service / load balancer / metrics scrape; nothing else
+  egress:
+    - to:                                    # cluster DNS
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+    - to:                                    # OTLP to the collector
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: observability}
+      ports: [{port: 4318, protocol: TCP}]
+    - to:                                    # model provider over HTTPS only, never cluster-internal
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+      ports: [{port: 443, protocol: TCP}]

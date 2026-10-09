@@ -1,0 +1,29 @@
+# Cloud-agnostic workload. Overlays (local, eks, gke) add the image, how traffic gets in,
+# where secrets come from and where telemetry goes.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: agent
+labels:
+  - pairs:
+      app.kubernetes.io/name: agent-api
+      app.kubernetes.io/part-of: agent-runtime
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+# The generated name carries a content hash, so a config change rolls the Deployment.
+configMapGenerator:
+  - name: agent-config
+    literals:
+      - OTEL_SERVICE_NAME=agent-api
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc:4318
+      - DEFAULT_BACKEND=scripted
+      - GROQ_MODEL=openai/gpt-oss-20b
+      - MAX_AGENT_STEPS=4
+      - STARTUP_DELAY_S=4
+      - RISK_ITERATIONS=60000

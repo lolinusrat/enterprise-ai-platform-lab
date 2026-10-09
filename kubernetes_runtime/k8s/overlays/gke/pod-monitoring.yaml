@@ -1,0 +1,11 @@
+# Google Cloud Managed Service for Prometheus scrapes /metrics from every agent pod.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: agent-api
+  namespace: agent
+spec:
+  selector:
+    matchLabels: {app: agent-api}
+  endpoints:
+    - {port: http, path: /metrics, interval: 15s}

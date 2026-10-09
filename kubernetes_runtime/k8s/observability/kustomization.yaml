@@ -1,0 +1,9 @@
+# Local telemetry backend. In production this is replaced by a managed pipeline
+# (EKS: ADOT -> X-Ray / Amazon Managed Prometheus; GKE: Managed OTel/Prometheus -> Cloud Trace / Monitoring).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - namespace.yaml
+  - otel-collector.yaml
+  - jaeger.yaml

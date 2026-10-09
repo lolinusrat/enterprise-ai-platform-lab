@@ -1,0 +1,95 @@
+[   3.0s] cluster: ready 2/3 desired 2 cpu 2% | worker=0 worker2=2 | 0.0/s p95 Nonems err 0.0%
+[   3.1s] agent 0.2.0 backends ['groq', 'scripted']
+
+[   3.1s] == 1. Chat through the Service
+[   4.7s]    groq: 200 1554.9ms on agent-api-c544dfbd5-k45sf tools=['lookup_order', 'risk_score']
+[   4.7s]    answer: Order **A1003** is delivered. Its fraud risk score is **94**, placing it in the **high** risk band【A1003】.
+[   4.7s]    scripted: 200 9.6ms on agent-api-c544dfbd5-k45sf tools=['risk_score', 'lookup_order']
+[   4.7s]    answer: Order A1003 has a high fraud risk (score 94). Order A1003 is delivered via FedEx, ETA 2026-10-02, total $980.00.
+
+[   4.7s] == 2. Autoscale: 120 req/s from 2 replicas
+[   4.7s]    ready 2/3 desired 2 cpu 2% | worker=0 worker2=2 | 0.0/s p95 Nonems err 0.0%
+[  14.7s]    ready 2/2 desired 2 cpu 2% | worker=0 worker2=2 | 120.0/s p95 11.0ms err 0.0%
+[  24.7s]    ready 2/2 desired 2 cpu 2% | worker=0 worker2=2 | 120.0/s p95 10.9ms err 0.0%
+[  34.7s]    ready 2/2 desired 2 cpu 14% | worker=0 worker2=2 | 120.0/s p95 11.0ms err 0.0%
+[  44.7s]    ready 2/2 desired 2 cpu 14% | worker=0 worker2=2 | 120.0/s p95 12.4ms err 0.0%
+[  74.7s]    scaled out: ready 8/8 desired 8 cpu 218% | worker=4 worker2=4 | 120.0/s p95 16.2ms err 0.0%
+[  74.7s]    requests 8400, failed 0 
+[  74.7s] load lowered to 60 req/s for the remaining phases
+
+[  84.7s] == 3. Readiness fault on one pod
+[  84.9s]    agent-api-c544dfbd5-k45sf: readiness failing
+[  84.9s]    ready 8/8 desired 8 cpu 193% | worker=4 worker2=4 | 60.0/s p95 11.4ms err 0.0%
+[ 100.9s]    NotReady, restarts unchanged, requests it served in the last 5s: 0
+[ 101.0s]    ready 7/8 desired 8 cpu 82% | worker=4 worker2=3 | 60.2/s p95 12.0ms err 0.0%
+[ 105.0s]    fault cleared, back in the Service: ready 8/8 desired 8 cpu 82% | worker=4 worker2=4 | 60.0/s p95 12.2ms err 0.0%
+[ 105.0s]    requests 1222, failed 0 
+
+[ 105.0s] == 4. Liveness fault on one pod
+[ 105.2s]    agent-api-c544dfbd5-k45sf: liveness failing (restarts 0)
+[ 105.2s]    ready 8/8 desired 8 cpu 82% | worker=4 worker2=4 | 60.0/s p95 12.2ms err 0.0%
+[ 115.2s]    ready 8/8 desired 8 cpu 38% | worker=4 worker2=4 | 60.0/s p95 17.0ms err 0.0%
+[ 123.2s]    ready 7/8 desired 8 cpu 30% | worker=4 worker2=3 | 60.0/s p95 12.9ms err 1.0%
+[ 129.2s]    container restarted by the kubelet: ready 8/8 desired 8 cpu 30% | worker=4 worker2=4 | 60.0/s p95 11.6ms err 0.0%
+[ 129.2s]    requests 1450, failed 3 {'ReadError': 3}
+
+[ 129.2s] == 5. Delete a pod
+[ 129.3s]    deleted agent-api-c544dfbd5-k45sf
+[ 129.3s]    ready 8/8 desired 8 cpu 30% | worker=4 worker2=4 | 60.0/s p95 11.8ms err 0.0%
+[ 137.3s]    replacement Ready: ready 8/8 desired 8 cpu 32% | worker=4 worker2=4 | 60.0/s p95 11.7ms err 0.0%
+[ 137.3s]    requests 485, failed 0 
+
+[ 137.3s] == 6. Rolling update under load
+[ 141.3s]    ready 8/9 desired 8 cpu 32% | worker=4 worker2=4 | 60.0/s p95 11.4ms err 0.0%
+[ 151.3s]    ready 8/10 desired 8 cpu 31% | worker=4 worker2=4 | 60.0/s p95 11.3ms err 0.0%
+[ 161.3s]    ready 8/10 desired 8 cpu 31% | worker=4 worker2=4 | 60.0/s p95 12.6ms err 0.0%
+[ 171.3s]    ready 8/10 desired 8 cpu 32% | worker=5 worker2=3 | 60.0/s p95 11.3ms err 0.0%
+[ 181.3s]    ready 8/10 desired 8 cpu 28% | worker=5 worker2=3 | 60.0/s p95 11.6ms err 0.0%
+[ 191.3s]    ready 8/9 desired 8 cpu 28% | worker=5 worker2=3 | 60.0/s p95 15.3ms err 0.0%
+[ 197.4s]    every pod replaced: ready 8/8 desired 8 cpu 31% | worker=5 worker2=3 | 60.0/s p95 16.0ms err 0.0%
+[ 197.4s]    requests 3603, failed 0 
+
+[ 197.4s] == 7. Rotate the API token
+[ 197.4s]    token 88b14e37 -> 93bd6411; old kept as api-token-previous
+[ 197.4s]    ready 8/8 desired 8 cpu 31% | worker=5 worker2=3 | 60.0/s p95 16.0ms err 0.0%
+[ 207.4s]    ready 8/8 desired 8 cpu 31% | worker=5 worker2=3 | 59.8/s p95 30.9ms err 0.0%
+[ 217.4s]    ready 8/8 desired 8 cpu 29% | worker=5 worker2=3 | 60.0/s p95 26.1ms err 0.0%
+[ 227.5s]    ready 8/8 desired 8 cpu 41% | worker=5 worker2=3 | 60.0/s p95 23.8ms err 0.0%
+[ 237.5s]    ready 8/8 desired 8 cpu 41% | worker=5 worker2=3 | 60.0/s p95 22.3ms err 0.0%
+[ 247.5s]    ready 8/8 desired 8 cpu 43% | worker=5 worker2=3 | 60.0/s p95 20.6ms err 0.0%
+[ 257.5s]    ready 7/8 desired 7 cpu 44% | worker=4 worker2=3 | 60.0/s p95 20.5ms err 0.0%
+[ 263.5s]    complete: 7/7 pods on new token after 65s, client switched, restarts 0 (unchanged)
+[ 263.5s]    requests 3969, failed 0 
+
+[ 263.5s] == 8. Drain a worker node
+[ 263.5s]    before: ready 7/7 desired 7 cpu 44% | worker=4 worker2=3 | 60.0/s p95 20.8ms err 0.0%
+[ 271.6s]    ready 5/9 desired 7 cpu 43% | worker=0 worker2=5 | 60.0/s p95 11.7ms err 0.0%
+[ 273.5s]    drained: ready 7/7 desired 7 cpu 43% | worker=0 worker2=7 | 61.2/s p95 13.0ms err 0.0%
+[ 273.6s]    agent-runtime-worker uncordoned (running pods are not moved back; new ones may land there)
+[ 273.6s]    requests 610, failed 0 
+
+[ 275.6s] == Summary
+[ 275.6s]    2. Autoscale: 120 req/s from 2 replicas    requests   8400  failed 0
+[ 275.6s]    3. Readiness fault on one pod              requests   1222  failed 0
+[ 275.6s]    4. Liveness fault on one pod               requests   1450  failed 3
+[ 275.6s]    5. Delete a pod                            requests    485  failed 0
+[ 275.6s]    6. Rolling update under load               requests   3603  failed 0
+[ 275.6s]    7. Rotate the API token                    requests   3969  failed 0
+[ 275.6s]    8. Drain a worker node                     requests    610  failed 0
+
+[ 275.6s] Actions and scaling / eviction events (oldest first). Startup-probe failures during the 4s
+[ 275.6s] warm-up and readiness failures on pods that are shutting down are expected and omitted.
+[ 275.6s]    23:16:09 ui         groq chat -> 200 served by agent-api-c544dfbd5-k45sf
+[ 275.6s]    23:16:09 ui         scripted chat -> 200 served by agent-api-c544dfbd5-k45sf
+[ 275.6s]    23:16:50 kubernetes SuccessfulRescale: HorizontalPodAutoscaler/agent-api - New size: 5; reason: cpu resource utilization (percentage of request) above target
+[ 275.6s]    23:17:05 kubernetes SuccessfulRescale: HorizontalPodAutoscaler/agent-api - New size: 8; reason: cpu resource utilization (percentage of request) above target
+[ 275.6s]    23:17:29 ui         agent-api-c544dfbd5-k45sf: readiness now fails: removed from Service endpoints, not restarted
+[ 275.6s]    23:17:45 ui         agent-api-c544dfbd5-k45sf: fault cleared
+[ 275.6s]    23:17:49 ui         agent-api-c544dfbd5-k45sf: liveness now fails: the kubelet will restart the container
+[ 275.6s]    23:18:13 ui         deleted pod agent-api-c544dfbd5-k45sf: the ReplicaSet replaces it
+[ 275.6s]    23:18:21 ui         rolling update started (maxSurge 1, maxUnavailable 0)
+[ 275.6s]    23:19:22 ui         secret rotated: new token 93bd6411 written, old 88b14e37 kept as previous
+[ 275.6s]    23:20:20 kubernetes SuccessfulRescale: HorizontalPodAutoscaler/agent-api - New size: 7; reason: All metrics below target
+[ 275.6s]    23:20:27 ui         all 7 pods loaded token 93bd6411 after 65s; client switched, no restarts
+[ 275.6s]    23:20:36 ui         agent-runtime-worker drained
+[ 275.6s]    23:20:38 ui         agent-runtime-worker uncordoned: new pods may schedule there again

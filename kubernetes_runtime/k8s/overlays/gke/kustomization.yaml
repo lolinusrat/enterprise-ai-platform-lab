@@ -1,0 +1,26 @@
+# Google GKE (Standard or Autopilot). Placeholders: my-project, europe-west1, certificate map.
+# Assumes: Gateway API enabled, External Secrets Operator with a ClusterSecretStore
+# "gcp-secret-manager", Google Cloud Managed Service for Prometheus, and an OTel collector at
+# otel-collector.observability exporting to Cloud Trace.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - external-secret.yaml
+  - gateway.yaml
+  - pod-monitoring.yaml
+components:
+  - ../../components/production
+images:
+  - {name: agent-api, newName: europe-west1-docker.pkg.dev/my-project/agent/agent-api, newTag: 0.2.0}
+configMapGenerator:
+  - name: agent-config
+    behavior: merge
+    literals: [DEFAULT_BACKEND=groq]
+patches:
+  # Workload Identity: the Kubernetes ServiceAccount acts as this IAM service account.
+  - target: {kind: ServiceAccount, name: agent-api}
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value: {iam.gke.io/gcp-service-account: agent-api@my-project.iam.gserviceaccount.com}

@@ -10,6 +10,7 @@ Small, runnable reference implementations of the building blocks of an enterpris
 | [`observability_llmops`](observability_llmops/) | A LangGraph agent traced with OpenTelemetry (GenAI conventions), token and cost accounting from spans, and a regression-eval gate that fails a run on quality, token or cost regressions | LangGraph, OpenTelemetry, Jaeger, FastAPI, Groq, Ollama |
 | [`security_identity`](security_identity/) | A tool-calling agent that must obtain a signed, short-lived grant before reading a customer record; OPA denies unauthorized access at the tool gateway regardless of the agent's instructions (rogue prompts, injection, borrowed grants) | OPA/Rego, RS256 grants, FastAPI, Groq |
 | [`governance_controlPlane`](governance_controlPlane/) | A central control plane for agents built by separate business units: admission checks, layered Rego policies, workload identity, model catalog, budgets and a hash-chained audit ledger, enforced by agent, model and tool gateways | OPA/Rego, FastAPI, SPIFFE-style identity, SQLite, Ollama |
+| [`kubernetes_runtime`](kubernetes_runtime/) | An agent API on a local Kubernetes cluster with CPU autoscaling, startup/readiness/liveness probes, hot-reloaded secrets with zero-downtime rotation, and OpenTelemetry traces and metrics, plus the equivalent EKS and GKE deployment | kind, Kubernetes HPA, Kustomize, OpenTelemetry Collector, Jaeger, FastAPI, Groq |
 | [`rag_retrieval`](rag_retrieval/) | Permission-aware hybrid RAG retrieval: ACLs enforced inside BM25 and vector search, RRF fusion and cross-encoder reranking, evaluated against vector-only search and against post-filtering and no filtering | fastembed (ONNX bge-small, MiniLM cross-encoder), FastAPI, Ollama |
 
 ## Where the use cases sit
@@ -17,10 +18,13 @@ Small, runnable reference implementations of the building blocks of an enterpris
 ```mermaid
 flowchart LR
     Gov["Governance control plane<br/>admission · policy · identity · audit<br/><i>governance_controlPlane</i>"]
-    Apps["Applications and agents"] --> GW["AI gateway<br/>routing · quotas · cost<br/><i>gateway_finops</i>"]
+    RT["Agent runtime<br/>autoscaling · probes · secrets · telemetry<br/><i>kubernetes_runtime</i>"] --> GW
+    Apps["Applications and agents"] -. "deployed on" .-> RT
+    Apps --> GW["AI gateway<br/>routing · quotas · cost<br/><i>gateway_finops</i>"]
     GW --> Models["Model endpoints<br/>cloud and local"]
     Gov -. "policies, budgets" .-> GW
-    Apps -. "traces" .-> Obs["Observability and LLMOps<br/>traces · cost · regression evals<br/><i>observability_llmops</i>"]
+    Apps -. "traces" .-> Obs
+    RT -. "OTLP" .-> Obs["Observability and LLMOps<br/>traces · cost · regression evals<br/><i>observability_llmops</i>"]
     GW -. "spend" .-> Obs
     Apps -- "tool calls" --> TG["Tool gateway<br/>grant-gated data access<br/><i>security_identity</i>"]
     TG --> Data["Enterprise data<br/>customer records"]

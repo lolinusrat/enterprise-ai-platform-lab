@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-api
+spec:
+  # No `replicas`: the HPA owns the count, so re-applying manifests never resets a scale-out.
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: {app: agent-api}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}   # never drop below current capacity
+  template:
+    metadata:
+      labels: {app: agent-api}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: agent-api
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: agent-api}
+      containers:
+        - name: agent-api
+          image: agent-api
+          ports:
+            - {name: http, containerPort: 8000}
+          envFrom:
+            - configMapRef: {name: agent-config}
+          env:
+            - {name: POD_NAME, valueFrom: {fieldRef: {fieldPath: metadata.name}}}
+            - {name: POD_NAMESPACE, valueFrom: {fieldRef: {fieldPath: metadata.namespace}}}
+            - {name: NODE_NAME, valueFrom: {fieldRef: {fieldPath: spec.nodeName}}}
+            - {name: SECRETS_DIR, value: /var/run/secrets/agent}
+            - {name: PYTHONDONTWRITEBYTECODE, value: "1"}
+          resources:
+            requests: {cpu: 200m, memory: 192Mi}
+            limits: {cpu: "1", memory: 384Mi}
+          startupProbe:          # holds liveness/readiness off until warm-up finishes (up to 60s)
+            httpGet: {path: /startupz, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:        # failing -> removed from Service endpoints, not restarted
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 2
+          livenessProbe:         # failing -> container restarted by the kubelet
+            httpGet: {path: /livez, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          lifecycle:
+            # Keep serving while endpoint removal propagates to kube-proxy / load balancers,
+            # then SIGTERM lets uvicorn drain in-flight requests.
+            preStop:
+              sleep: {seconds: 5}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: secrets, mountPath: /var/run/secrets/agent, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        # Mounted as files (not env vars): values are not visible in `kubectl describe`, and an
+        # updated Secret is swapped into the volume, which the app re-reads on change.
+        - name: secrets
+          secret:
+            secretName: agent-secrets
+            defaultMode: 0440
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}

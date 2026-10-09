@@ -1,0 +1,122 @@
+# One collector between workloads and backends: apps only know "OTLP to the collector",
+# so backends can change without redeploying apps.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector-pod-discovery
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-pod-discovery
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: otel-collector-pod-discovery}
+subjects:
+  - {kind: ServiceAccount, name: otel-collector, namespace: observability}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http: {endpoint: 0.0.0.0:4318}
+          grpc: {endpoint: 0.0.0.0:4317}
+      # Scrape every pod annotated prometheus.io/scrape=true in the agent namespace.
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: agent-pods
+              scrape_interval: 5s
+              kubernetes_sd_configs:
+                - role: pod
+                  namespaces: {names: [agent]}
+              relabel_configs:
+                - {source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape], action: keep, regex: "true"}
+                - {source_labels: [__meta_kubernetes_pod_phase], action: keep, regex: Running}
+                - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  regex: ([^:]+)(?::\d+)?;(\d+)
+                  replacement: $$1:$$2
+                  target_label: __address__
+                - {source_labels: [__meta_kubernetes_pod_name], target_label: pod}
+                - {source_labels: [__meta_kubernetes_pod_node_name], target_label: node}
+    processors:
+      memory_limiter: {check_interval: 1s, limit_percentage: 80, spike_limit_percentage: 20}
+      batch: {}
+    exporters:
+      otlp/jaeger:
+        endpoint: jaeger.observability.svc:4317
+        tls: {insecure: true}
+      prometheus:
+        endpoint: 0.0.0.0:8889
+      debug: {verbosity: basic}
+    extensions:
+      health_check: {endpoint: 0.0.0.0:13133}
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlp/jaeger]
+        metrics:
+          receivers: [prometheus, otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: otel-collector}
+  template:
+    metadata:
+      labels: {app: otel-collector}
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+        - name: collector
+          image: otel/opentelemetry-collector-contrib:0.162.0
+          args: [--config=/conf/config.yaml]
+          ports:
+            - {name: otlp-http, containerPort: 4318}
+            - {name: otlp-grpc, containerPort: 4317}
+            - {name: prom, containerPort: 8889}
+          readinessProbe:
+            httpGet: {path: /, port: 13133}
+          livenessProbe:
+            httpGet: {path: /, port: 13133}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: conf, mountPath: /conf}
+      volumes:
+        - name: conf
+          configMap: {name: otel-collector}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+spec:
+  type: NodePort
+  selector: {app: otel-collector}
+  ports:
+    - {name: otlp-http, port: 4318, targetPort: otlp-http}
+    - {name: otlp-grpc, port: 4317, targetPort: otlp-grpc}
+    - {name: prom, port: 8889, targetPort: prom, nodePort: 30889}

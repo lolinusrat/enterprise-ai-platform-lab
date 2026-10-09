@@ -1,0 +1,16 @@
+# Local cluster: 1 control plane + 2 workers, so pods spread across nodes and
+# a node can be drained during the demo. NodePorts are mapped to the host.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: agent-runtime
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080   # agent-api Service (NodePort)
+        hostPort: 18080
+      - containerPort: 30686   # Jaeger UI (NodePort)
+        hostPort: 16687
+      - containerPort: 30889   # OTel collector Prometheus exporter (NodePort)
+        hostPort: 8889
+  - role: worker
+  - role: worker

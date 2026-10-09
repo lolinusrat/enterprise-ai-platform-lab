@@ -1,0 +1,18 @@
+# kind cluster: locally built image, NodePort mapped to localhost:18080, Secret created by
+# scripts/up.sh from your environment (never committed), in-cluster OTel collector + Jaeger.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - ../../observability
+images:
+  - {name: agent-api, newName: agent-api, newTag: 0.2.0}
+patches:
+  - target: {kind: Service, name: agent-api}
+    patch: |
+      - op: add
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30080
