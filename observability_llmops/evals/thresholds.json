@@ -1,0 +1,8 @@
+{
+  "pass_rate_drop_pp": 0.0,
+  "total_tokens_increase_pct": 20.0,
+  "cost_increase_pct": 20.0,
+  "p95_model_latency_increase_pct": 50.0,
+  "case_tokens_increase_pct": 50.0,
+  "_note": "Gate = fail the run. pass-rate and per-case pass->fail flips are hard gates; token/cost gates on suite totals; latency and per-case token growth are warnings (provider latency is noisy)."
+}

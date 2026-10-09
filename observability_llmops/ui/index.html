@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LangGraph Observability</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5f6b7a; --line: #dfe3e8; --soft: #eef1f4;
+  --accent: #3b5bdb; --accent-soft: #e7ecff;
+  --agent: #6741d9; --node: #868e96; --chat: #1c7ed6; --tool: #e8590c;
+  --ok: #2b8a3e; --ok-soft: #e6f4ea; --bad: #c92a2a; --bad-soft: #fdeaea; --warn: #b7791f; --warn-soft: #fff4dc;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa5b1; --line: #2d333b; --soft: #222831;
+    --accent: #7c96ff; --accent-soft: #232c4d;
+    --agent: #a78bfa; --node: #9aa5b1; --chat: #4dabf7; --tool: #ff922b;
+    --ok: #51cf66; --ok-soft: #1b3324; --bad: #ff6b6b; --bad-soft: #3a1d1d; --warn: #fcc419; --warn-soft: #3a3016;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa5b1; --line: #2d333b; --soft: #222831;
+  --accent: #7c96ff; --accent-soft: #232c4d;
+  --agent: #a78bfa; --node: #9aa5b1; --chat: #4dabf7; --tool: #ff922b;
+  --ok: #51cf66; --ok-soft: #1b3324; --bad: #ff6b6b; --bad-soft: #3a1d1d; --warn: #fcc419; --warn-soft: #3a3016;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+header { display: flex; align-items: center; gap: 24px; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+header .sub { color: var(--muted); font-size: 13px; }
+nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+nav button { border: 0; background: none; color: var(--muted); padding: 7px 12px; border-radius: 6px; font: inherit; cursor: pointer; }
+nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px; }
+section.tab { display: none; } section.tab.active { display: block; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+.card h2 { font-size: 14px; margin: 0 0 4px; font-weight: 650; }
+.card p.hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } main { padding: 16px; } }
+svg text { font-family: inherit; fill: var(--ink); }
+svg .box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+svg .lane { fill: var(--soft); stroke: none; }
+svg .lane-title { font-size: 12px; font-weight: 650; fill: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+svg .t { font-size: 13px; font-weight: 600; }
+svg .s { font-size: 11px; fill: var(--muted); }
+svg .m { font-size: 11px; font-family: var(--mono); fill: var(--muted); }
+svg .edge { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+svg .edge.dash { stroke-dasharray: 5 4; }
+svg .accent { stroke: var(--accent); }
+svg .el { font-size: 11px; fill: var(--muted); }
+.flow .fnode rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.6; transition: all .25s; }
+.flow .fnode.term rect { fill: var(--soft); }
+.flow .fnode.visited rect { stroke: var(--accent); stroke-width: 2.4; fill: var(--accent-soft); }
+.flow .fedge { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+.flow .fedge.cond { stroke-dasharray: 5 4; }
+.flow .fedge.visited { stroke: var(--accent); stroke-width: 2.4; stroke-dasharray: none; }
+.flow .badge circle { fill: var(--accent); } .flow .badge text { fill: #fff; font-size: 10px; font-weight: 700; }
+ol.seq { margin: 0; padding-left: 20px; } ol.seq li { margin: 6px 0; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+input[type=text], select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; }
+input[type=text] { flex: 1; min-width: 220px; }
+button.primary { font: inherit; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 7px; padding: 8px 16px; cursor: pointer; }
+button.primary:disabled { opacity: .55; cursor: progress; }
+button.ghost { font: inherit; background: none; color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 7px 12px; cursor: pointer; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.chip { font-size: 12px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.kpi { background: var(--soft); border-radius: 8px; padding: 10px 12px; }
+.kpi .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.kpi .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .d { font-size: 12px; font-variant-numeric: tabular-nums; }
+.up-bad { color: var(--bad); } .down-good { color: var(--ok); } .flat { color: var(--muted); }
+.answer { background: var(--soft); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; }
+.meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.wf { width: 100%; }
+.wf-row { display: grid; grid-template-columns: minmax(150px, 34%) 1fr 74px; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 5px; cursor: pointer; font-size: 12.5px; }
+.wf-row:hover { background: var(--soft); } .wf-row.sel { background: var(--accent-soft); }
+.wf-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-track { position: relative; height: 14px; }
+.wf-bar { position: absolute; top: 2px; height: 10px; border-radius: 3px; min-width: 2px; }
+.wf-dur { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); padding: 6px 8px; }
+td { border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.attrs td:first-child { color: var(--muted); font-family: var(--mono); font-size: 11.5px; width: 45%; word-break: break-all; }
+.attrs td:last-child { font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+.pill { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); } .pill.n { background: var(--soft); color: var(--muted); }
+.verdict { border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; font-weight: 600; display: flex; gap: 10px; align-items: center; }
+.verdict.ok { background: var(--ok-soft); color: var(--ok); } .verdict.bad { background: var(--bad-soft); color: var(--bad); }
+.verdict.n { background: var(--soft); color: var(--muted); }
+ul.findings { margin: 0; padding-left: 18px; } ul.findings li { margin: 4px 0; }
+tr.case { cursor: pointer; } tr.case:hover td { background: var(--soft); }
+tr.detail td { background: var(--soft); }
+.tools { font-family: var(--mono); font-size: 11.5px; }
+.progress { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin: 10px 0; }
+.progress div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.empty { color: var(--muted); padding: 24px; text-align: center; }
+.bars .b { display: grid; grid-template-columns: 70px 1fr 60px; gap: 8px; align-items: center; font-size: 12px; margin: 5px 0; }
+.bars .track { background: var(--soft); height: 10px; border-radius: 3px; overflow: hidden; display: flex; }
+.err { color: var(--bad); }
+pre.prompt { white-space: pre-wrap; background: var(--soft); padding: 10px 12px; border-radius: 8px; font-size: 12px; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>LangGraph Observability &amp; Evals</h1><div class="sub">OpenTelemetry spans · token &amp; cost accounting · regression-gated evals</div></div>
+  <nav>
+    <button data-tab="arch" class="active">Architecture &amp; flow</button>
+    <button data-tab="live">Live trace</button>
+    <button data-tab="evals">Evals &amp; regressions</button>
+    <button data-tab="dataset">Dataset</button>
+  </nav>
+</header>
+<main>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section class="tab active" id="tab-arch">
+  <div class="card">
+    <h2>Architecture</h2>
+    <p class="hint">Three layers: the agent at runtime, the telemetry pipeline that observes it, and the evaluation loop that reads the telemetry to gate changes.</p>
+    <svg viewBox="0 0 1180 560" width="100%" role="img" aria-label="Architecture diagram">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+        <marker id="ara" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+      </defs>
+      <!-- lanes -->
+      <rect class="lane" x="10" y="10" width="1160" height="170" rx="10"/>
+      <text class="lane-title" x="26" y="34">1 · Runtime</text>
+      <rect class="lane" x="10" y="194" width="1160" height="170" rx="10"/>
+      <text class="lane-title" x="26" y="218">2 · Telemetry (OpenTelemetry)</text>
+      <rect class="lane" x="10" y="378" width="1160" height="172" rx="10"/>
+      <text class="lane-title" x="26" y="402">3 · Evaluation &amp; regression gate</text>
+
+      <!-- runtime -->
+      <rect class="box" x="30" y="56" width="170" height="104" rx="8"/>
+      <text class="t" x="44" y="80">Callers</text>
+      <text class="s" x="44" y="100">Web UI  (ui/server.py)</text>
+      <text class="s" x="44" y="118">CLI  (run.py)</text>
+      <text class="s" x="44" y="136">Eval runner (run_evals.py)</text>
+
+      <rect class="box" x="250" y="48" width="390" height="120" rx="8" style="stroke:var(--agent)"/>
+      <text class="t" x="266" y="72">LangGraph · support_agent</text>
+      <text class="m" x="266" y="94">classify → decline | agent ⇄ tools → END</text>
+      <rect x="266" y="108" width="358" height="46" rx="6" fill="var(--accent-soft)"/>
+      <text class="t" x="278" y="128" style="fill:var(--accent)">OTelCallbackHandler</text>
+      <text class="s" x="278" y="145">LangChain callbacks → spans (chain / chat model / tool events)</text>
+
+      <rect class="box" x="690" y="48" width="220" height="56" rx="8" style="stroke:var(--chat)"/>
+      <text class="t" x="704" y="70">Model backends</text>
+      <text class="s" x="704" y="88">Groq gpt-oss · Ollama · Scripted</text>
+      <rect class="box" x="690" y="114" width="220" height="54" rx="8" style="stroke:var(--tool)"/>
+      <text class="t" x="704" y="136">Tools</text>
+      <text class="m" x="704" y="154">lookup_order · policy · calc</text>
+
+      <rect class="box" x="950" y="48" width="200" height="120" rx="8" stroke-dasharray="5 4"/>
+      <text class="t" x="964" y="72">Rate limiter</text>
+      <text class="s" x="964" y="92">Process-wide, 28 req/min</text>
+      <text class="s" x="964" y="110">Waits inside the node span,</text>
+      <text class="s" x="964" y="126">outside the chat span, so</text>
+      <text class="s" x="964" y="142">model latency stays clean</text>
+
+      <path class="edge" d="M200,108 H248" marker-end="url(#ar)"/>
+      <path class="edge" d="M640,76 H688" marker-end="url(#ar)"/>
+      <path class="edge" d="M640,140 H688" marker-end="url(#ar)"/>
+      <path class="edge dash" d="M910,108 H948" marker-start="url(#ar)"/>
+
+      <!-- telemetry -->
+      <rect class="box" x="250" y="236" width="230" height="110" rx="8"/>
+      <text class="t" x="264" y="260">TracerProvider</text>
+      <text class="m" x="264" y="280">invoke_agent support_agent</text>
+      <text class="m" x="264" y="296">└ node classify | agent | tools</text>
+      <text class="m" x="264" y="312">  └ chat &lt;model&gt;</text>
+      <text class="m" x="264" y="328">  └ execute_tool &lt;name&gt;</text>
+      <path class="edge accent" d="M445,154 V234" marker-end="url(#ara)"/>
+      <text class="el" x="452" y="200">spans with gen_ai.* attributes</text>
+
+      <rect class="box" x="540" y="232" width="610" height="56" rx="8"/>
+      <text class="t" x="554" y="254">Exporters</text>
+      <text class="s" x="554" y="272">JSONL → <tspan class="m">traces/spans.jsonl</tspan>  ·  OTLP/HTTP (optional) → Jaeger, Phoenix, LangSmith…</text>
+      <rect class="box" x="540" y="298" width="200" height="56" rx="8"/>
+      <text class="t" x="554" y="320">TraceCollector</text>
+      <text class="s" x="554" y="338">in-memory, keyed by trace id</text>
+      <rect class="box" x="790" y="298" width="360" height="56" rx="8"/>
+      <text class="t" x="804" y="320">usage.summarize(spans)</text>
+      <text class="s" x="804" y="338">tokens · reasoning · cost · per node/model → back to caller</text>
+
+      <path class="edge" d="M480,262 H538" marker-end="url(#ar)"/>
+      <path class="edge" d="M480,326 H538" marker-end="url(#ar)"/>
+      <path class="edge" d="M740,326 H788" marker-end="url(#ar)"/>
+
+      <!-- evaluation -->
+      <rect class="box" x="30" y="430" width="180" height="100" rx="8"/>
+      <text class="t" x="44" y="454">dataset.jsonl</text>
+      <text class="s" x="44" y="474">12 cases, tagged</text>
+      <text class="s" x="44" y="490">intent · required tools</text>
+      <text class="s" x="44" y="506">must / must-not include</text>
+
+      <rect class="box" x="260" y="430" width="200" height="100" rx="8"/>
+      <text class="t" x="274" y="454">run_suite</text>
+      <text class="s" x="274" y="474">invokes the graph per case</text>
+      <text class="s" x="274" y="490">× N repeats; trajectory read</text>
+      <text class="s" x="274" y="506">from execute_tool spans</text>
+
+      <rect class="box" x="510" y="430" width="200" height="100" rx="8"/>
+      <text class="t" x="524" y="454">score + summarize</text>
+      <text class="s" x="524" y="474">per-check pass/fail</text>
+      <text class="s" x="524" y="490">pass rate, tokens, cost,</text>
+      <text class="s" x="524" y="506">p95 model latency</text>
+
+      <rect class="box" x="760" y="430" width="180" height="100" rx="8"/>
+      <text class="t" x="774" y="454">compare()</text>
+      <text class="s" x="774" y="474">vs baseline.json</text>
+      <text class="s" x="774" y="490">with thresholds.json</text>
+
+      <rect class="box" x="990" y="430" width="160" height="100" rx="8" style="stroke:var(--bad)"/>
+      <text class="t" x="1004" y="454">Gate</text>
+      <text class="s" x="1004" y="474">exit 1 on regression</text>
+      <text class="s" x="1004" y="490">pass→fail flips,</text>
+      <text class="s" x="1004" y="506">token / cost growth</text>
+
+      <path class="edge" d="M210,480 H258" marker-end="url(#ar)"/>
+      <path class="edge" d="M460,480 H508" marker-end="url(#ar)"/>
+      <path class="edge" d="M710,480 H758" marker-end="url(#ar)"/>
+      <path class="edge" d="M940,480 H988" marker-end="url(#ar)"/>
+      <path class="edge accent" d="M640,354 V428" marker-end="url(#ara)"/>
+      <text class="el" x="648" y="400">spans per case</text>
+    </svg>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Graph flow</h2>
+      <p class="hint">Solid edges are fixed and dashed edges are conditional. The edges come from the compiled graph (<code>graph.get_graph()</code>): <span id="edgeList" class="mono"></span></p>
+      <div id="flowBig"></div>
+    </div>
+    <div class="card">
+      <h2>One request, step by step</h2>
+      <p class="hint">What runs, and which span each step emits.</p>
+      <ol class="seq">
+        <li><b>Root span.</b> <code>graph.invoke()</code> fires <code>on_chain_start</code> with no parent, which opens <code>invoke_agent support_agent</code>. The span starts a new trace.</li>
+        <li><b>classify node.</b> This opens <code>node classify</code>, and the LLM call inside it opens <code>chat openai/gpt-oss-20b</code>. The chat span records <code>gen_ai.usage.input_tokens</code>, <code>output_tokens</code>, <code>reasoning_tokens</code> and <code>cost_usd</code> from the response's <code>usage_metadata</code>.</li>
+        <li><b>Route.</b> The router function produces no span; its callback events are attached to the nearest traced ancestor. An intent of <code>other</code> goes to <code>decline</code>, which makes no model call and costs nothing.</li>
+        <li><b>agent ⇄ tools loop.</b> Each agent turn opens <code>node agent</code> with a <code>chat</code> span inside it, and the chat span lists the tool calls it requested. Each tool call opens <code>execute_tool lookup_order</code> (or the other tools) under <code>node tools</code>.</li>
+        <li><b>End.</b> The root span gets <code>support.intent</code> and closes. The collector hands the whole trace back to the caller, and <code>usage.summarize()</code> adds up tokens, cost and the tool trajectory from the spans alone.</li>
+        <li><b>Eval.</b> The runner scores the answer and the tool trajectory against the case, then <code>compare()</code> checks the run against the baseline and its thresholds.</li>
+      </ol>
+      <p class="meta">Message content isn't recorded unless <code>OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true</code> (currently <b id="capFlag">off</b>). OTLP export: <b id="otlpFlag">off</b>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LIVE ============ -->
+<section class="tab" id="tab-live">
+  <div class="card">
+    <h2>Ask the support agent</h2>
+    <p class="hint">Each run produces a full trace. The token and cost figures come from the spans alone.</p>
+    <div class="row">
+      <input type="text" id="q" value="I opened the headphones from order A1001. How much refund would I get?">
+      <select id="liveBackend"></select>
+      <select id="liveModel"></select>
+      <select id="livePrompt"><option value="v1">prompt v1 (shipped)</option><option value="v2">prompt v2 (token-saving edit)</option></select>
+      <button class="primary" id="runBtn">Run</button>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div id="liveOut"><div class="card empty">Run a question to see its trace.</div></div>
+</section>
+
+<!-- ============ EVALS ============ -->
+<section class="tab" id="tab-evals">
+  <div class="card">
+    <h2>Run the eval suite</h2>
+    <p class="hint">Every case runs through the instrumented graph, then the run is compared with the committed baseline. Two changes to try. Switching the model to <code>gpt-oss-120b</code> roughly doubles the cost, which trips the cost gate. Prompt v2 is a token-saving edit: on Groq it changes the tool trajectory (a warning), and on the scripted model it breaks the cases outright.</p>
+    <div class="row">
+      <select id="evBackend"></select>
+      <select id="evModel"></select>
+      <select id="evPrompt"><option value="v1">prompt v1 (shipped)</option><option value="v2">prompt v2 (token-saving edit)</option></select>
+      <select id="evRepeats"><option value="1">1 repeat</option><option value="2">2 repeats</option><option value="3">3 repeats</option></select>
+      <button class="primary" id="evBtn">Run evals</button>
+      <span style="flex:1"></span>
+      <select id="savedSel"><option value="">Load a saved run…</option></select>
+    </div>
+    <div class="progress" id="evProg" hidden><div></div></div>
+    <div class="meta" id="evStatus"></div>
+  </div>
+  <div id="evOut"></div>
+</section>
+
+<!-- ============ DATASET ============ -->
+<section class="tab" id="tab-dataset">
+  <div class="card">
+    <h2>Evaluation dataset</h2>
+    <p class="hint"><code>evals/dataset.jsonl</code>. Each <code>must_include</code> group lists alternatives, and one per group must appear in the answer. Tool expectations are checked against the <code>execute_tool</code> spans, not against the answer text.</p>
+    <div style="overflow-x:auto"><table id="dsTable"></table></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Regression thresholds</h2><p class="hint"><code>evals/thresholds.json</code></p><table id="thTable" class="attrs"></table></div>
+    <div class="card"><h2>Agent prompts</h2><p class="hint">v2 is the regression the eval suite should catch.</p><div id="prompts"></div></div>
+  </div>
+</section>
+</main>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = n => Number(n).toLocaleString(undefined, {maximumFractionDigits: 0});
+const usd = n => "$" + Number(n).toFixed(6);
+let CFG = null;
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + b.dataset.tab));
+  try { localStorage.setItem("tab", b.dataset.tab); } catch (e) {}
+});
+
+/* ---------- flow diagram (positions hand-laid, edges from the compiled graph) ---------- */
+const POS = {__start__: [250, 30], classify: [250, 110], decline: [90, 220], agent: [320, 220], tools: [520, 220], __end__: [250, 330]};
+const LABEL = {__start__: "START", __end__: "END"};
+function flowSVG(edges, visited = [], idSuffix = "") {
+  const W = 120, H = 38;
+  const seenEdges = new Set();
+  for (let i = 0; i + 1 < visited.length; i++) seenEdges.add(visited[i] + ">" + visited[i + 1]);
+  const center = n => POS[n];
+  let out = `<svg class="flow" viewBox="0 0 600 370" width="100%"><defs>
+    <marker id="fa${idSuffix}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    <marker id="fv${idSuffix}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker></defs>`;
+  for (const [s, t, cond] of edges) {
+    const [x1, y1] = center(s), [x2, y2] = center(t);
+    let d;
+    if (s === "agent" && t === "tools") d = `M${x1 + W/2},${y1 - 8} H${x2 - W/2 - 2}`;
+    else if (s === "tools" && t === "agent") d = `M${x1 - W/2},${y1 + 8} H${x2 + W/2 + 2}`;
+    else {
+      const sy = y2 > y1 ? y1 + H/2 : y1 - H/2, ty = y2 > y1 ? y2 - H/2 - 2 : y2 + H/2 + 2;
+      d = `M${x1},${sy} C${x1},${(sy + ty)/2} ${x2},${(sy + ty)/2} ${x2},${ty}`;
+    }
+    const v = seenEdges.has(s + ">" + t);
+    out += `<path class="fedge ${cond ? "cond" : ""} ${v ? "visited" : ""}" d="${d}" marker-end="url(#${v ? "fv" : "fa"}${idSuffix})"/>`;
+  }
+  out += `<text class="el" x="40" y="172" style="font-size:11px;fill:var(--muted)">intent = other</text>
+          <text class="el" x="300" y="168" style="font-size:11px;fill:var(--muted)">order / refund / policy</text>
+          <text class="el" x="392" y="204" style="font-size:11px;fill:var(--muted)">tool_calls</text>
+          <text class="el" x="400" y="248" style="font-size:11px;fill:var(--muted)">results</text>
+          <text class="el" x="296" y="290" style="font-size:11px;fill:var(--muted)">no tool_calls</text>`;
+  const steps = {};
+  visited.forEach((n, i) => (steps[n] = steps[n] || []).push(i + 1));
+  for (const [n, [x, y]] of Object.entries(POS)) {
+    const term = n.startsWith("__");
+    out += `<g class="fnode ${term ? "term" : ""} ${steps[n] ? "visited" : ""}"><rect x="${x - W/2}" y="${y - H/2}" width="${W}" height="${H}" rx="${term ? 19 : 8}"/>
+      <text x="${x}" y="${y + 4}" text-anchor="middle" style="font-size:13px;font-weight:600">${LABEL[n] || n}</text></g>`;
+    if (steps[n] && !term) {
+      const label = steps[n].length > 3 ? steps[n].slice(0, 3).join(",") + "…" : steps[n].join(",");
+      const bw = 10 + label.length * 6;
+      out += `<g class="badge"><rect x="${x + W/2 - bw + 6}" y="${y - H/2 - 9}" width="${bw}" height="16" rx="8" fill="var(--accent)"/>
+        <text x="${x + W/2 - bw/2 + 6}" y="${y - H/2 + 3}" text-anchor="middle" style="fill:#fff;font-size:10px;font-weight:700">${label}</text></g>`;
+    }
+  }
+  return out + "</svg>";
+}
+
+/* ---------- waterfall ---------- */
+const OPCOLOR = {invoke_agent: "var(--agent)", chat: "var(--chat)", execute_tool: "var(--tool)"};
+function opOf(s) { return s.attributes["gen_ai.operation.name"] || "node"; }
+function orderSpans(spans) {
+  const kids = {};
+  spans.forEach(s => (kids[s.parent_id] = kids[s.parent_id] || []).push(s));
+  Object.values(kids).forEach(a => a.sort((x, y) => x.start_ns - y.start_ns));
+  const ids = new Set(spans.map(s => s.span_id));
+  const roots = spans.filter(s => !s.parent_id || !ids.has(s.parent_id));
+  const out = [];
+  const walk = (s, d) => { out.push([s, d]); (kids[s.span_id] || []).forEach(c => walk(c, d + 1)); };
+  roots.forEach(r => walk(r, 0));
+  return out;
+}
+function waterfall(spans, host) {
+  if (!spans.length) { host.innerHTML = `<div class="empty">No spans.</div>`; return; }
+  const t0 = Math.min(...spans.map(s => s.start_ns)), t1 = Math.max(...spans.map(s => s.end_ns));
+  const total = Math.max(1, t1 - t0);
+  const rows = orderSpans(spans);
+  host.innerHTML = `<div class="legend"><span><i class="dot" style="background:var(--agent)"></i>agent</span><span><i class="dot" style="background:var(--node)"></i>graph node</span><span><i class="dot" style="background:var(--chat)"></i>model call</span><span><i class="dot" style="background:var(--tool)"></i>tool call</span><span style="margin-left:auto">Click a span to see its attributes</span></div>
+    <div class="wf">${rows.map(([s, d], i) => {
+      const a = s.attributes, op = opOf(s);
+      const left = 100 * (s.start_ns - t0) / total, width = 100 * (s.end_ns - s.start_ns) / total;
+      const tok = op === "chat" ? ` <span class="meta mono">${a["gen_ai.usage.input_tokens"]}→${a["gen_ai.usage.output_tokens"]} tok</span>` : "";
+      const err = s.status === "ERROR" || a["gen_ai.tool.result.error"] ? ` <span class="pill bad">error</span>` : "";
+      return `<div class="wf-row" data-i="${i}"><div class="wf-name" style="padding-left:${d * 14}px">${esc(s.name)}${tok}${err}</div>
+        <div class="wf-track"><div class="wf-bar" style="left:${left}%;width:${width}%;background:${OPCOLOR[op] || "var(--node)"}"></div></div>
+        <div class="wf-dur">${s.duration_ms.toFixed(1)} ms</div></div>`;
+    }).join("")}</div><table class="attrs" style="margin-top:12px"></table>`;
+  const table = host.querySelector("table.attrs");
+  const show = i => {
+    host.querySelectorAll(".wf-row").forEach(r => r.classList.toggle("sel", +r.dataset.i === i));
+    const s = rows[i][0];
+    const base = {name: s.name, trace_id: s.trace_id, span_id: s.span_id, parent_id: s.parent_id, status: s.status, duration_ms: s.duration_ms};
+    table.innerHTML = Object.entries({...base, ...s.attributes}).map(([k, v]) =>
+      `<tr><td>${esc(k)}</td><td>${esc(typeof v === "object" ? JSON.stringify(v) : v)}</td></tr>`).join("");
+  };
+  host.querySelectorAll(".wf-row").forEach(r => r.onclick = () => show(+r.dataset.i));
+  show(rows.findIndex(([s]) => opOf(s) === "chat") >= 0 ? rows.findIndex(([s]) => opOf(s) === "chat") : 0);
+}
+function visitedNodes(spans) {
+  const nodes = spans.filter(s => s.attributes["langgraph.node"] && opOf(s) === "node")
+                     .sort((a, b) => a.start_ns - b.start_ns).map(s => s.attributes["langgraph.node"]);
+  return spans.length ? ["__start__", ...nodes, "__end__"] : [];
+}
+
+/* ---------- live run ---------- */
+async function runLive() {
+  const btn = $("#runBtn"); btn.disabled = true; btn.textContent = "Running…";
+  $("#liveOut").innerHTML = `<div class="card empty">Running through the graph…</div>`;
+  try {
+    const r = await fetch("/api/run", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question: $("#q").value, backend: $("#liveBackend").value, model: $("#liveModel").value, prompt: $("#livePrompt").value})});
+    if (!r.ok) throw new Error(await r.text());
+    renderLive(await r.json());
+  } catch (e) { $("#liveOut").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+  btn.disabled = false; btn.textContent = "Run";
+}
+function renderLive(r) {
+  const u = r.usage;
+  const nodes = Object.entries(u.by_node);
+  const maxTok = Math.max(1, ...nodes.map(([, v]) => v.input_tokens + v.output_tokens));
+  $("#liveOut").innerHTML = `
+  <div class="card"><h2>Answer</h2>
+    <div class="answer">${esc(r.answer) || "<i>(empty)</i>"}</div>
+    <div class="meta">intent <b>${esc(r.intent)}</b> · trace <span class="mono">${esc(r.trace_id)}</span>${CFG.jaeger_ui ? ` · <a href="${esc(CFG.jaeger_ui)}/trace/${esc(r.trace_id)}" target="_blank" rel="noopener">open in Jaeger ↗</a>` : ""}${r.error ? ` · <span class="err">${esc(r.error)}</span>` : ""}</div></div>
+  <div class="grid2">
+    <div class="card"><h2>Path taken</h2><p class="hint">The numbers give each node's step order, read from the <code>node</code> spans.</p>${flowSVG(CFG.graph.edges, visitedNodes(r.spans), "L")}</div>
+    <div class="card"><h2>Token usage &amp; cost</h2><p class="hint">Summed from the <code>chat</code> spans. Reasoning tokens are counted inside output tokens.</p>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Input</div><div class="v">${fmt(u.input_tokens)}</div></div>
+        <div class="kpi"><div class="l">Output</div><div class="v">${fmt(u.output_tokens)}</div><div class="d flat">${fmt(u.reasoning_tokens)} reasoning</div></div>
+        <div class="kpi"><div class="l">Total</div><div class="v">${fmt(u.total_tokens)}</div></div>
+        <div class="kpi"><div class="l">Cost</div><div class="v">${usd(u.cost_usd)}</div></div>
+        <div class="kpi"><div class="l">Model calls</div><div class="v">${u.llm_calls}</div><div class="d flat">${u.tool_calls} tool calls</div></div>
+        <div class="kpi"><div class="l">End-to-end</div><div class="v">${fmt(u.latency_ms)}<small> ms</small></div><div class="d flat">${fmt(u.model_latency_ms)} ms in model</div></div>
+      </div>
+      <h2 style="margin-top:16px">Tokens by node</h2>
+      <div class="bars">${nodes.map(([n, v]) => `<div class="b"><span>${esc(n)}</span>
+        <div class="track"><div style="width:${100 * v.input_tokens / maxTok}%;background:var(--chat);opacity:.55"></div><div style="width:${100 * v.output_tokens / maxTok}%;background:var(--chat)"></div></div>
+        <span class="num mono">${fmt(v.input_tokens + v.output_tokens)}</span></div>`).join("")}</div>
+      <div class="legend" style="margin-top:8px"><span><i class="dot" style="background:var(--chat);opacity:.55"></i>input</span><span><i class="dot" style="background:var(--chat)"></i>output</span></div>
+      <p class="meta">Tools called: <span class="tools">${esc(u.tools_called.join(" → ") || "none")}</span></p></div>
+  </div>
+  <div class="card"><h2>Trace</h2><div id="wfLive"></div></div>`;
+  waterfall(r.spans, $("#wfLive"));
+}
+
+/* ---------- evals ---------- */
+let pollTimer = null;
+async function startEval() {
+  const body = {backend: $("#evBackend").value, model: $("#evModel").value, prompt: $("#evPrompt").value, repeats: +$("#evRepeats").value};
+  $("#evBtn").disabled = true;
+  const r = await fetch("/api/evals", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const {job_id} = await r.json();
+  $("#evProg").hidden = false;
+  $("#evOut").innerHTML = `<div class="card"><h2>Cases as they finish</h2><table id="liveCases"></table></div>`;
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    const j = await (await fetch("/api/evals/" + job_id)).json();
+    $("#evProg div").style.width = (100 * j.done.length / j.total) + "%";
+    $("#evStatus").textContent = `${j.done.length}/${j.total} cases · backend ${j.backend} · prompt ${j.prompt}` +
+      (j.backend === "groq" ? " · Groq is throttled to 28 requests/min, so a full run takes about 2 minutes per repeat" : "");
+    const t = $("#liveCases");
+    if (t) t.innerHTML = j.done.map(c => `<tr><td>${c.passed ? '<span class="pill ok">pass</span>' : '<span class="pill bad">fail</span>'}</td>
+      <td>${esc(c.id)}</td><td class="tools">${esc(c.tools_called.join(" → "))}</td><td class="num">${fmt(c.total_tokens)} tok</td></tr>`).join("");
+    if (j.status !== "running") {
+      clearInterval(pollTimer); $("#evBtn").disabled = false; $("#evProg").hidden = true;
+      if (j.status === "error") { $("#evOut").innerHTML = `<div class="card err">${esc(j.error)}</div>`; return; }
+      $("#evStatus").textContent = `Finished in ${j.report.meta.wall_s}s and saved to evals/results/.`;
+      renderEval(j.report, j.verdict, job_id);
+      loadSavedList();
+    }
+  }, 1200);
+}
+function delta(cur, base, lowerIsBetter = true, unit = "%") {
+  if (base == null) return "";
+  if (unit === "pp") { const d = cur - base; return `<span class="${d < 0 ? "up-bad" : d > 0 ? "down-good" : "flat"}">${d >= 0 ? "+" : ""}${d.toFixed(1)} pp vs baseline</span>`; }
+  const d = base ? 100 * (cur - base) / base : 0;
+  const cls = Math.abs(d) < 0.5 ? "flat" : (d > 0) === lowerIsBetter ? "up-bad" : "down-good";
+  return `<span class="${cls}">${d >= 0 ? "+" : ""}${d.toFixed(1)}% vs baseline</span>`;
+}
+async function renderEval(report, verdict, jobId) {
+  let baseline = null;
+  try { const r = await fetch("/api/baseline/" + report.meta.backend); if (r.ok) baseline = await r.json(); } catch (e) {}
+  const s = report.summary, b = baseline?.summary;
+  const bc = Object.fromEntries((baseline?.cases || []).map(c => [c.id, c]));
+  const v = verdict;
+  const vbox = !v ? `<div class="verdict n">No baseline for this backend yet. You can promote this run to baseline.</div>`
+    : v.ok ? `<div class="verdict ok">✓ No regressions against the baseline (${esc(baseline.meta.prompt_version)}, ${esc(baseline.meta.started_at)})</div>`
+           : `<div class="verdict bad">✗ Regression detected: ${v.regressions.length} gate failure${v.regressions.length > 1 ? "s" : ""}. In CI, <code>run_evals.py</code> would exit 1.</div>`;
+  const list = (title, items, cls) => items?.length ? `<div><span class="pill ${cls}">${title}</span><ul class="findings">${items.map(i =>
+      `<li><b>${esc(i.case || i.metric)}</b>: ${esc(i.detail)}${i.baseline_tools ? `<br><span class="tools">tools ${esc(i.baseline_tools.join("→") || "none")} ⟶ ${esc(i.current_tools.join("→") || "none")}</span>` : ""}</li>`).join("")}</ul></div>` : "";
+  $("#evOut").innerHTML = `${vbox}
+  <div class="card"><h2>Suite summary</h2><p class="hint">${esc(report.meta.backend)} · ${esc(report.meta.model)} · prompt ${esc(report.meta.prompt_version)} · ${report.meta.repeats} repeat(s) · ${esc(report.meta.started_at)}</p>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Pass rate</div><div class="v">${s.pass_rate}%</div><div class="d">${b ? delta(s.pass_rate, b.pass_rate, false, "pp") : ""}</div></div>
+      <div class="kpi"><div class="l">Total tokens</div><div class="v">${fmt(s.total_tokens)}</div><div class="d">${b ? delta(s.total_tokens, b.total_tokens) : ""}</div></div>
+      <div class="kpi"><div class="l">Cost</div><div class="v">${usd(s.cost_usd)}</div><div class="d">${b ? delta(s.cost_usd, b.cost_usd) : ""}</div></div>
+      <div class="kpi"><div class="l">Model calls</div><div class="v">${fmt(s.llm_calls)}</div><div class="d">${b ? delta(s.llm_calls, b.llm_calls) : ""}</div></div>
+      <div class="kpi"><div class="l">Tool calls</div><div class="v">${fmt(s.tool_calls)}</div><div class="d">${b ? delta(s.tool_calls, b.tool_calls, false) : ""}</div></div>
+      <div class="kpi"><div class="l">p95 model latency</div><div class="v">${fmt(s.p95_model_latency_ms)}<small> ms</small></div><div class="d">${b ? delta(s.p95_model_latency_ms, b.p95_model_latency_ms) : ""}</div></div>
+    </div>
+    <p class="meta">Pass rate by tag: ${Object.entries(s.by_tag).map(([t, p]) => `<b>${esc(t)}</b> ${p}%${b?.by_tag?.[t] != null && b.by_tag[t] !== p ? ` <span class="${p < b.by_tag[t] ? "up-bad" : "down-good"}">(was ${b.by_tag[t]}%)</span>` : ""}`).join(" · ")}</p>
+    ${jobId ? `<button class="ghost" id="promote">Promote this run to baseline</button>` : ""}</div>
+  ${v ? `<div class="card"><h2>Comparison findings</h2><div class="grid2">${list("regressions", v.regressions, "bad") || '<div class="meta">No regressions.</div>'}<div>${list("warnings", v.warnings, "warn")}${list("improvements", v.improvements, "ok")}</div></div></div>` : ""}
+  <div class="card"><h2>Cases</h2><p class="hint">Click a row to see the answer, the failed checks and the trace.</p>
+    <div style="overflow-x:auto"><table><thead><tr><th>Case</th><th>Baseline</th><th>Now</th><th>Failed checks</th><th>Tool trajectory (baseline → now)</th><th class="num">Tokens</th><th class="num">Δ</th></tr></thead>
+    <tbody>${report.cases.map((c, i) => { const o = bc[c.id]; const d = o ? c.total_tokens - o.total_tokens : null;
+      const flip = o && o.passed && !c.passed;
+      return `<tr class="case" data-i="${i}"${flip ? ' style="box-shadow: inset 3px 0 var(--bad)"' : ""}><td><b>${esc(c.id)}</b><div class="meta">${c.tags.map(esc).join(", ")}</div></td>
+        <td>${o ? (o.passed ? '<span class="pill ok">pass</span>' : '<span class="pill bad">fail</span>') : '<span class="pill n">—</span>'}</td>
+        <td>${c.passed ? '<span class="pill ok">pass</span>' : '<span class="pill bad">fail</span>'}${c.pass_fraction > 0 && c.pass_fraction < 1 ? ` <span class="meta">${Math.round(c.pass_fraction * 100)}%</span>` : ""}</td>
+        <td class="mono">${esc(c.failed_checks.join(", "))}</td>
+        <td class="tools">${o ? esc(o.tools_called.join("→") || "none") + " → " : ""}<b>${esc(c.tools_called.join("→") || "none")}</b></td>
+        <td class="num">${fmt(c.total_tokens)}</td><td class="num ${d > 0 ? "up-bad" : d < 0 ? "down-good" : "flat"}">${d == null ? "" : (d > 0 ? "+" : "") + fmt(d)}</td></tr>
+        <tr class="detail" id="det-${i}" hidden><td colspan="7"></td></tr>`; }).join("")}</tbody></table></div></div>`;
+  document.querySelectorAll("tr.case").forEach(tr => tr.onclick = () => {
+    const i = +tr.dataset.i, c = report.cases[i], det = $("#det-" + i);
+    det.hidden = !det.hidden;
+    if (!det.hidden && !det.dataset.done) {
+      det.dataset.done = 1;
+      const o = bc[c.id];
+      det.firstElementChild.innerHTML = `<div class="grid2"><div><b>Question</b><div class="answer" style="margin:4px 0 10px">${esc(c.question)}</div>
+        <b>Answer now</b><div class="answer" style="margin-top:4px">${esc(c.answer)}</div>
+        ${o ? `<b style="display:block;margin-top:10px">Answer in baseline</b><div class="answer" style="margin-top:4px">${esc(o.answer)}</div>` : ""}</div>
+        <div><b>Trace</b><div class="wfc"></div></div></div>`;
+      if (c.spans) waterfall(c.spans, det.querySelector(".wfc"));
+      else det.querySelector(".wfc").innerHTML = `<div class="meta">No spans stored for this run.</div>`;
+    }
+  });
+  const p = $("#promote");
+  if (p) p.onclick = async () => { await fetch("/api/baseline/from-job/" + jobId, {method: "POST"}); p.textContent = "Baseline updated ✓"; p.disabled = true; };
+}
+async function loadSavedList() {
+  const names = await (await fetch("/api/results")).json();
+  $("#savedSel").innerHTML = `<option value="">Load a saved run…</option>` + names.map(n => `<option>${esc(n)}</option>`).join("");
+}
+$("#savedSel").onchange = async e => {
+  if (!e.target.value) return;
+  const r = await (await fetch("/api/results/" + encodeURIComponent(e.target.value))).json();
+  $("#evStatus").textContent = "Loaded " + e.target.value;
+  renderEval(r.report, r.verdict, null);
+};
+
+/* ---------- boot ---------- */
+(async () => {
+  CFG = await (await fetch("/api/config")).json();
+  $("#flowBig").innerHTML = flowSVG(CFG.graph.edges, [], "B");
+  $("#edgeList").textContent = CFG.graph.edges.map(([s, t, c]) => `${s}${c ? " ⇢ " : " → "}${t}`).join(", ");
+  $("#capFlag").textContent = CFG.capture_content ? "on" : "off";
+  $("#otlpFlag").textContent = CFG.otlp_endpoint || "off";
+  const opts = CFG.backends.map(b => `<option value="${b}">${b}</option>`).join("");
+  $("#liveBackend").innerHTML = opts; $("#evBackend").innerHTML = opts;
+  const fillModels = (bk, md) => { md.innerHTML = CFG.models[bk.value].map(m => `<option>${esc(m)}</option>`).join(""); };
+  [["#liveBackend", "#liveModel"], ["#evBackend", "#evModel"]].forEach(([b, m]) => {
+    fillModels($(b), $(m)); $(b).addEventListener("change", () => fillModels($(b), $(m)));
+  });
+  $("#chips").innerHTML = CFG.dataset.slice(0, 12).map(c => `<span class="chip" title="${esc(c.id)}">${esc(c.question)}</span>`).join("");
+  document.querySelectorAll(".chip").forEach(ch => ch.onclick = () => { $("#q").value = ch.textContent; runLive(); });
+  $("#runBtn").onclick = runLive;
+  $("#q").onkeydown = e => { if (e.key === "Enter") runLive(); };
+  $("#evBtn").onclick = startEval;
+  const fmtGroups = g => (g || []).map(grp => Array.isArray(grp) ? grp.map(esc).join(" | ") : esc(grp)).join("<br>");
+  $("#dsTable").innerHTML = `<thead><tr><th>ID</th><th>Question</th><th>Intent</th><th>Required tools</th><th>Must include (one per line)</th><th>Must not include</th><th>Tags</th></tr></thead><tbody>` +
+    CFG.dataset.map(c => `<tr><td class="mono">${esc(c.id)}</td><td>${esc(c.question)}</td><td class="mono">${esc(c.expected_intent)}</td>
+      <td class="tools">${esc((c.required_tools || []).join(", "))}${c.forbidden_tools ? `<span class="meta">none allowed</span>` : ""}</td>
+      <td style="font-size:12px">${fmtGroups(c.must_include)}</td><td style="font-size:12px">${(c.must_not_include || []).map(esc).join("<br>")}</td>
+      <td style="font-size:12px">${(c.tags || []).map(esc).join(", ")}</td></tr>`).join("") + "</tbody>";
+  $("#thTable").innerHTML = Object.entries(CFG.thresholds).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+  $("#prompts").innerHTML = `<b>classify</b><pre class="prompt">${esc(CFG.classify_prompt)}</pre>` +
+    Object.entries(CFG.prompts).map(([k, v]) => `<b style="display:block;margin-top:10px">agent ${k}</b><pre class="prompt">${esc(v)}</pre>`).join("");
+  loadSavedList();
+  try { const t = localStorage.getItem("tab"); if (t) document.querySelector(`nav button[data-tab="${t}"]`)?.click(); } catch (e) {}
+})();
+</script>
+</body>
+</html>

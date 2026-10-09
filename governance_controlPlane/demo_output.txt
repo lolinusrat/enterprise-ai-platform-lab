@@ -1,0 +1,44 @@
+
+== 1. Admission (deploy-time, Rego in OPA) ===============================
+ok Mortgage pre-qualifier     admitted  HTTP 201  A4:warn
+ok Collections agent          pending   HTTP 201  A10:pending
+ok Campaign agent on Opus     rejected  HTTP 422  A2:fail A3:fail A4:fail
+ok Retail admin tries to approve own high-tier agent -> HTTP 403
+ok Risk Office approves collections-agent -> active
+
+== 2. Runtime scenarios (gateways -> OPA -> Ollama / mock systems) =======
+ok Branch email draft               obligations  GR-04    1.3s  claude-sonnet-5-5 (stand-in: ollama/llama3.2:1b)
+      Redacted 4 entities (card number, email, person name, phone) before sending to Anthropic (private endpoint).
+      output: Prompt as sent: Draft a reply to this customer email: "Hi, I'm [PERSON_NAME]. My card [CARD_NUMBER] was charged twice for the same purchase. Call me on [PHONE] or email [EMAIL]."  Here's a draft reply:  "Dear [PERSON_NAM
+ok Restricted prompt                obligations  GR-03    2.0s  gpt-oss-120b (stand-in: ollama/llama3.2:1b)
+      claude-sonnet-5-5 is cleared to Confidential. Rerouted to gpt-oss-120b (in-boundary).
+      output: I don't have access to real-time data or specific customer accounts, including account 062-000 12345678 held by Mr. David Chen. However, I can guide you through the general process of resolving disputes.  Typically, I wo
+ok Refund by high-risk agent        hold         GR-06    0.0s  
+      Write to Payments queued for a second approver in the Retail Banking case queue. The requester cannot approve it. Case CASE-1041.
+      output: Held for approval as CASE-1041. Nothing was written.
+ok CRM write, user lacks rights     deny         GR-05    0.0s  
+      s.patel is not in group crm-writer, so the token carries no crm.write scope. The agent cannot do what its user cannot.
+ok Confidential brief to Marketing  deny         GR-03    0.0s  
+      Prompt classified Confidential; the agent's ceiling is Internal.
+ok Suspended agent                  deny         GR-01    0.0s  
+      marketing/seo-scout is suspended. Its SVID is revoked, so the gateway refuses the session.
+ok Cross-BU call                    deny         GR-10    0.0s  
+      j.okafor is in Retail Banking; people/hr-helpdesk serves People & Culture only.
+
+== 3. Kill switch ========================================================
+ok Marketing admin tries to suspend a Retail agent -> HTTP 403
+ok Retail admin suspends branch-assist; next call -> deny (GR-01)
+ok Reinstated; next call -> allow
+
+== 4. Tokens: forged and wrong-audience tokens are refused ===============
+ok Unsigned user token -> deny: User token rejected: Unable to find a signing key that matches: "None"
+ok Calling the model gateway directly with a user token, no SVID -> HTTP 401
+
+== 5. Audit ledger =======================================================
+ok Chain verified over 31 events, head d54afcd0eab45d2c
+ok Rewrote event #31 from deny to allow -> verify reports break at #31
+ok Restored -> chain intact again
+ok Retail admin's audit view holds 18 events, all Retail
+Pending approvals: ['CASE-1041 payments.refund']
+
+ALL CHECKS PASSED

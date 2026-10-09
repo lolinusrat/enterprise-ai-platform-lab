@@ -1,0 +1,308 @@
+{
+ "models": {
+  "claude-opus-5-5": {
+   "provider": "Anthropic (private endpoint)",
+   "hosting": "external",
+   "maxClass": 2,
+   "rate": 15,
+   "status": "active"
+  },
+  "claude-sonnet-5-5": {
+   "provider": "Anthropic (private endpoint)",
+   "hosting": "external",
+   "maxClass": 2,
+   "rate": 3,
+   "status": "active"
+  },
+  "claude-haiku-4-5": {
+   "provider": "Anthropic (private endpoint)",
+   "hosting": "external",
+   "maxClass": 2,
+   "rate": 1,
+   "status": "active"
+  },
+  "gpt-oss-120b": {
+   "provider": "self-hosted GPU pool, ap-southeast-2",
+   "hosting": "in-boundary",
+   "maxClass": 3,
+   "rate": 0.4,
+   "status": "active"
+  },
+  "legacy-chat-v1": {
+   "provider": "public SaaS API",
+   "hosting": "external",
+   "maxClass": 1,
+   "rate": 2,
+   "status": "deprecated"
+  }
+ },
+ "tools": {
+  "crm.read": {
+   "sys": "CRM",
+   "mode": "read",
+   "cls": 2,
+   "ent": "crm-reader"
+  },
+  "crm.write": {
+   "sys": "CRM",
+   "mode": "write",
+   "cls": 2,
+   "ent": "crm-writer"
+  },
+  "core-banking.read": {
+   "sys": "Core banking",
+   "mode": "read",
+   "cls": 3,
+   "ent": "cb-reader"
+  },
+  "payments.refund": {
+   "sys": "Payments",
+   "mode": "write",
+   "cls": 3,
+   "ent": "refund-approver"
+  },
+  "portfolio.read": {
+   "sys": "Portfolio",
+   "mode": "read",
+   "cls": 3,
+   "ent": "wealth-advisor"
+  },
+  "research.search": {
+   "sys": "Research",
+   "mode": "read",
+   "cls": 1,
+   "ent": "all-staff"
+  },
+  "hris.read": {
+   "sys": "HRIS",
+   "mode": "read",
+   "cls": 3,
+   "ent": "hr-partner"
+  },
+  "policy-kb.search": {
+   "sys": "Policy KB",
+   "mode": "read",
+   "cls": 1,
+   "ent": "all-staff"
+  },
+  "cms.publish": {
+   "sys": "CMS",
+   "mode": "write",
+   "cls": 0,
+   "ent": "content-publisher"
+  },
+  "analytics.read": {
+   "sys": "Analytics",
+   "mode": "read",
+   "cls": 1,
+   "ent": "marketing-analyst"
+  },
+  "web.search": {
+   "sys": "Web",
+   "mode": "read",
+   "cls": 0,
+   "ent": "all-staff"
+  }
+ },
+ "bus": {
+  "retail": {
+   "name": "Retail Banking",
+   "code": "RB",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5",
+    "gpt-oss-120b"
+   ],
+   "maxClass": 3,
+   "tools": [
+    "crm.read",
+    "crm.write",
+    "core-banking.read",
+    "payments.refund",
+    "policy-kb.search"
+   ],
+   "budget": 400
+  },
+  "wealth": {
+   "name": "Wealth Management",
+   "code": "WM",
+   "models": [
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "gpt-oss-120b"
+   ],
+   "maxClass": 3,
+   "tools": [
+    "crm.read",
+    "crm.write",
+    "portfolio.read",
+    "research.search"
+   ],
+   "budget": 250
+  },
+  "people": {
+   "name": "People & Culture",
+   "code": "PC",
+   "models": [
+    "gpt-oss-120b",
+    "claude-haiku-4-5"
+   ],
+   "maxClass": 3,
+   "tools": [
+    "hris.read",
+    "policy-kb.search"
+   ],
+   "budget": 80
+  },
+  "marketing": {
+   "name": "Marketing",
+   "code": "MK",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5"
+   ],
+   "maxClass": 1,
+   "tools": [
+    "cms.publish",
+    "analytics.read",
+    "web.search"
+   ],
+   "budget": 150
+  }
+ },
+ "agents": {
+  "retail/branch-assist": {
+   "bu": "retail",
+   "name": "branch-assist",
+   "owner": "j.okafor@corp.example",
+   "models": [
+    "claude-haiku-4-5",
+    "claude-sonnet-5-5"
+   ],
+   "cls": 2,
+   "tools": [
+    "crm.read",
+    "policy-kb.search"
+   ],
+   "tier": "medium",
+   "hitl": false,
+   "customerFacing": false,
+   "tokens": 40,
+   "status": "active",
+   "bundle": "rb-test",
+   "version": "1.4.0"
+  },
+  "retail/dispute-resolver": {
+   "bu": "retail",
+   "name": "dispute-resolver",
+   "owner": "m.rossi@corp.example",
+   "models": [
+    "claude-sonnet-5-5",
+    "gpt-oss-120b"
+   ],
+   "cls": 3,
+   "tools": [
+    "core-banking.read",
+    "crm.read",
+    "payments.refund"
+   ],
+   "tier": "high",
+   "hitl": true,
+   "customerFacing": false,
+   "tokens": 60,
+   "status": "active",
+   "bundle": "rb-test",
+   "version": "2.1.0"
+  },
+  "wealth/advisor-copilot": {
+   "bu": "wealth",
+   "name": "advisor-copilot",
+   "owner": "s.patel@corp.example",
+   "models": [
+    "claude-opus-5-5",
+    "gpt-oss-120b"
+   ],
+   "cls": 3,
+   "tools": [
+    "portfolio.read",
+    "crm.read",
+    "crm.write",
+    "research.search"
+   ],
+   "tier": "high",
+   "hitl": true,
+   "customerFacing": false,
+   "tokens": 50,
+   "status": "active",
+   "bundle": "wm-test",
+   "version": "3.0.2"
+  },
+  "people/hr-helpdesk": {
+   "bu": "people",
+   "name": "hr-helpdesk",
+   "owner": "l.nguyen@corp.example",
+   "models": [
+    "gpt-oss-120b"
+   ],
+   "cls": 3,
+   "tools": [
+    "hris.read",
+    "policy-kb.search"
+   ],
+   "tier": "medium",
+   "hitl": false,
+   "customerFacing": false,
+   "tokens": 15,
+   "status": "active",
+   "bundle": "pc-test",
+   "version": "1.0.3"
+  },
+  "marketing/campaign-writer": {
+   "bu": "marketing",
+   "name": "campaign-writer",
+   "owner": "k.berg@corp.example",
+   "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5"
+   ],
+   "cls": 1,
+   "tools": [
+    "cms.publish",
+    "analytics.read",
+    "web.search"
+   ],
+   "tier": "medium",
+   "hitl": false,
+   "customerFacing": true,
+   "tokens": 30,
+   "status": "active",
+   "bundle": "mk-test",
+   "version": "0.9.0"
+  },
+  "marketing/seo-scout": {
+   "bu": "marketing",
+   "name": "seo-scout",
+   "owner": "k.berg@corp.example",
+   "models": [
+    "claude-haiku-4-5"
+   ],
+   "cls": 0,
+   "tools": [
+    "web.search"
+   ],
+   "tier": "low",
+   "hitl": false,
+   "customerFacing": false,
+   "tokens": 5,
+   "status": "suspended",
+   "bundle": "mk-test",
+   "version": "0.3.1"
+  }
+ },
+ "usage": {
+  "retail": 236000000,
+  "wealth": 118000000,
+  "people": 22000000,
+  "marketing": 131000000
+ }
+}

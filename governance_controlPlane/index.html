@@ -1,0 +1,1060 @@
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agent Control Plane</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky bar (persona + tabs) over one 1140px column; each tab is a stack of panels; diagrams scroll inside their own frame */
+:root{
+  --bg:#f2f4f3; --panel:#ffffff; --sunk:#e9edeb; --ink:#131a19; --ink-2:#44504d; --ink-3:#74807c; --line:#d3dad7; --grid:#e4e9e7;
+  --accent:#0b6a70; --accent-ink:#ffffff; --accent-soft:#d9eeed; --cp:#e3f1f0; --cp-line:#9cc9c6; --dp:#eef1f5; --dp-line:#b9c3d0;
+  --pass:#1f7a45; --pass-bg:#e1f2e6; --warn:#9a5d06; --warn-bg:#f9edd6; --deny:#b8372a; --deny-bg:#f9e3df; --hold:#5d49c0; --hold-bg:#e9e5fa;
+  --display:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121716; --panel:#1a201f; --sunk:#151a19; --ink:#e8eeec; --ink-2:#b4c0bc; --ink-3:#86938f; --line:#2e3836; --grid:#242c2a;
+  --accent:#4fb8b9; --accent-ink:#0b1414; --accent-soft:#16393a; --cp:#16302f; --cp-line:#2f6664; --dp:#1b2029; --dp-line:#3a4555;
+  --pass:#5cc286; --pass-bg:#173323; --warn:#e3a54a; --warn-bg:#3a2a10; --deny:#f07d6e; --deny-bg:#3d1c18; --hold:#a596f0; --hold-bg:#272148;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121716; --panel:#1a201f; --sunk:#151a19; --ink:#e8eeec; --ink-2:#b4c0bc; --ink-3:#86938f; --line:#2e3836; --grid:#242c2a;
+  --accent:#4fb8b9; --accent-ink:#0b1414; --accent-soft:#16393a; --cp:#16302f; --cp-line:#2f6664; --dp:#1b2029; --dp-line:#3a4555;
+  --pass:#5cc286; --pass-bg:#173323; --warn:#e3a54a; --warn-bg:#3a2a10; --deny:#f07d6e; --deny-bg:#3d1c18; --hold:#a596f0; --hold-bg:#272148;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:24px;font-weight:700}
+h2{font-size:18px;font-weight:600}
+h3{font-size:15px;font-weight:600}
+p{margin:0}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--panel);border-bottom:1px solid var(--line);padding:0 16px}
+.bar-in{max-width:1140px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px;padding-block:12px 0}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand svg{flex:none}
+.brand small{display:block;font:12px var(--mono);color:var(--ink-3)}
+.persona{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.persona select{background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.tabs{flex-basis:100%;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:8px 12px 10px;color:var(--ink-2);cursor:pointer;white-space:nowrap;font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button:hover{color:var(--ink)}
+
+main{padding:0 16px}
+.wrap{max-width:1140px;margin:0 auto;padding-block:24px 64px;display:grid;gap:18px}
+.view{display:grid;gap:18px}
+.lede{color:var(--ink-2);max-width:78ch}
+.eyebrow{font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;display:grid;gap:14px;min-width:0}
+.panel>header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}
+.sub{color:var(--ink-2);font-size:14px;max-width:84ch}
+.muted{color:var(--ink-3)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:18px}
+.split{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:860px){.split{grid-template-columns:minmax(0,1fr)}}
+.scroll{overflow-x:auto;min-width:0}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;display:grid;gap:0}
+.tile b{font:500 24px var(--mono);font-variant-numeric:tabular-nums}
+.tile span{font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font:500 11.5px var(--mono);padding:2px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pass,.active,.allow,.admitted{color:var(--pass);background:var(--pass-bg)}
+.warn,.obligations{color:var(--warn);background:var(--warn-bg)}
+.fail,.deny,.suspended,.rejected{color:var(--deny);background:var(--deny-bg)}
+.pending,.hold{color:var(--hold);background:var(--hold-bg)}
+.skip{color:var(--ink-3);background:var(--sunk)}
+textarea{font:inherit;color:inherit;background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-height:96px;resize:vertical}
+.out{background:var(--sunk);border-radius:8px;padding:12px 14px;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.out .muted{font:11.5px var(--mono)}
+.tag{display:inline-block;font:11.5px var(--mono);padding:1px 6px;border-radius:4px;background:var(--sunk);border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
+.tag.off{text-decoration:line-through;color:var(--ink-3)}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:7px;padding:8px 14px;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn.ghost:hover{background:var(--sunk)}
+.row-actions{display:flex;flex-wrap:wrap;gap:6px}
+
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--grid);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px}
+.agent-id{font:500 13px var(--mono)}
+.small{font-size:13px}
+
+/* architecture */
+.arch svg{display:block;min-width:940px;width:100%;height:auto}
+.arch text{fill:var(--ink-2);font:12px var(--body)}
+.arch .zone-cp{fill:var(--cp);stroke:var(--cp-line)}
+.arch .zone-dp{fill:var(--dp);stroke:var(--dp-line)}
+.arch .zone-label{fill:var(--ink);font:600 13px var(--display);letter-spacing:.02em}
+.arch .zone-note{fill:var(--ink-3);font:11px var(--mono)}
+.arch .node rect{fill:var(--panel);stroke:var(--line);stroke-width:1}
+.arch .node.ext rect{fill:var(--sunk);stroke-dasharray:4 3}
+.arch .node.pep rect{stroke:var(--accent);stroke-width:1.5}
+.arch .node{cursor:pointer}
+.arch .node:hover rect,.arch .node.sel rect{stroke:var(--accent);stroke-width:2}
+.arch .node .t{fill:var(--ink);font:600 12.5px var(--body)}
+.arch .node .s{fill:var(--ink-3);font:10.5px var(--mono)}
+.arch .edge{stroke:var(--ink-3);stroke-width:1.3;fill:none}
+.arch .edge.ctl{stroke:var(--accent);stroke-dasharray:5 4}
+.arch .edge.aud{stroke:var(--hold);stroke-dasharray:2 3}
+.arch .ah{fill:var(--ink-3)} .arch .ah-ctl{fill:var(--accent)} .arch .ah-aud{fill:var(--hold)}
+.arch .elabel{fill:var(--ink-2);font:10.5px var(--mono)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ink-2)}
+.legend i{display:inline-block;width:22px;height:0;border-top:2px solid var(--ink-3);vertical-align:middle;margin-right:6px}
+.legend i.ctl{border-top:2px dashed var(--accent)} .legend i.aud{border-top:2px dotted var(--hold)}
+.legend i.box{width:12px;height:12px;border:1.5px solid var(--accent);border-radius:3px}
+.detail{background:var(--sunk);border-radius:8px;padding:14px 16px;display:grid;gap:6px}
+.detail .who{font:11.5px var(--mono);color:var(--ink-3)}
+
+.own{display:grid;gap:8px}
+.own li{margin:0}
+.own ul{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--ink-2);font-size:14px}
+
+/* sequence diagrams */
+.seg{display:inline-flex;background:var(--sunk);border-radius:8px;padding:3px;gap:2px}
+.seg button{border:0;background:none;padding:5px 12px;border-radius:6px;cursor:pointer;color:var(--ink-2);font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0 / .08)}
+.seq svg{display:block;min-width:900px;width:100%;height:auto}
+.seq text{fill:var(--ink-2);font:11.5px var(--body)}
+.seq .lane rect{fill:var(--panel);stroke:var(--line)}
+.seq .lane.pep rect{stroke:var(--accent);stroke-width:1.5}
+.seq .lane.cp rect{fill:var(--cp);stroke:var(--cp-line)}
+.seq .lane text{fill:var(--ink);font:600 12px var(--body)}
+.seq .life{stroke:var(--line);stroke-dasharray:3 4}
+.seq .msg{stroke:var(--ink-2);stroke-width:1.3;fill:none}
+.seq .msg.ret{stroke-dasharray:4 3;stroke:var(--ink-3)}
+.seq .ah{fill:var(--ink-2)}
+.seq .n circle{fill:var(--accent)}
+.seq .n text{fill:var(--accent-ink);font:600 10.5px var(--mono)}
+.steps{margin:0;padding:0;list-style:none;display:grid;gap:6px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:26px 1fr;gap:8px;font-size:14px;color:var(--ink-2)}
+.steps li b{color:var(--ink);font-weight:600}
+.steps li::before{counter-increment:s;content:counter(s);font:600 11px var(--mono);background:var(--accent-soft);color:var(--accent);border-radius:50%;width:22px;height:22px;display:grid;place-items:center}
+
+/* forms */
+.form{display:grid;gap:12px}
+.field{display:grid;gap:4px;min-width:0}
+.field>label,.field>.lbl{font:500 12px var(--mono);color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.field input[type=text],.field input[type=number],.field select{background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.checks{display:grid;gap:4px}
+.checks label{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.checks label .tag{margin-left:auto}
+.inline{display:flex;flex-wrap:wrap;gap:6px 16px}
+.inline label{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+pre.yaml{margin:0;background:var(--sunk);border-radius:8px;padding:12px 14px;font:12px/1.55 var(--mono);color:var(--ink-2);overflow-x:auto;white-space:pre}
+.ck{display:grid;grid-template-columns:42px 1fr auto;gap:4px 12px;align-items:start;padding:10px 0;border-bottom:1px solid var(--grid)}
+.ck:last-child{border-bottom:0}
+.ck .id{font:500 12px var(--mono);color:var(--ink-3);padding-top:2px}
+.ck .lbl{font-weight:600}
+.ck .det{grid-column:2/4;color:var(--ink-2);font-size:13.5px}
+.ck .rule{font:11px var(--mono);color:var(--ink-3)}
+.verdict{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:14px 16px;border-radius:8px}
+.verdict b{font:600 17px var(--display)}
+.verdict.admitted,.verdict.allow{background:var(--pass-bg);color:var(--pass)}
+.verdict.pending,.verdict.hold{background:var(--hold-bg);color:var(--hold)}
+.verdict.rejected,.verdict.deny{background:var(--deny-bg);color:var(--deny)}
+.verdict.obligations{background:var(--warn-bg);color:var(--warn)}
+.verdict span{color:var(--ink-2);font-size:14px}
+.verdict .btn{margin-left:auto}
+
+/* trace */
+.trace{list-style:none;margin:0;padding:0;display:grid}
+.trace li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:12px;position:relative;padding-bottom:14px}
+.trace li::after{content:"";position:absolute;left:9px;top:20px;bottom:0;border-left:2px solid var(--line)}
+.trace li:last-child::after{display:none}
+.trace .dot{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:700 11px var(--mono)}
+.trace .head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.trace .comp{font:500 11.5px var(--mono);color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.trace .chk{font-weight:600}
+.trace .d{color:var(--ink-2);font-size:14px}
+.trace .rule{font:11px var(--mono);color:var(--ink-3);margin-left:auto}
+
+/* policy */
+.layer{display:grid;gap:8px}
+.gr{display:grid;grid-template-columns:56px 1fr;gap:4px 10px;font-size:14px;padding:6px 0;border-bottom:1px solid var(--grid)}
+.gr:last-child{border-bottom:0}
+.gr b{font:500 12px var(--mono);color:var(--accent);padding-top:2px}
+.gr .at{grid-column:2;font:11.5px var(--mono);color:var(--ink-3)}
+.eff td:last-child{background:var(--accent-soft)}
+.eff th:last-child{color:var(--accent)}
+
+/* audit */
+.hash{font:11.5px var(--mono);color:var(--ink-3);white-space:nowrap}
+tr.broken td{background:var(--deny-bg)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.toolbar select{background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.chain{font-size:14px;padding:10px 14px;border-radius:8px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;max-width:min(560px,calc(100% - 32px));z-index:20}
+@media (max-width:520px){.two{grid-template-columns:1fr}.ck{grid-template-columns:34px 1fr}.ck .pill{grid-column:2}.ck .det{grid-column:2}}
+@media (prefers-reduced-motion:no-preference){.trace li{animation:in .25s ease both}@keyframes in{from{transform:translateY(4px);opacity:.4}to{transform:none;opacity:1}}}
+</style>
+
+<div class="bar">
+  <div class="bar-in">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="6" style="fill:var(--accent)"/><path d="M7 9h14M7 14h14M7 19h14" style="stroke:var(--accent-ink)" stroke-width="2"/><circle cx="11" cy="9" r="2.4" style="fill:var(--accent-ink)"/><circle cx="18" cy="14" r="2.4" style="fill:var(--accent-ink)"/><circle cx="13" cy="19" r="2.4" style="fill:var(--accent-ink)"/></svg>
+      <div><h1>Agent Control Plane</h1><small>federated agents · central guardrails</small></div>
+    </div>
+    <span class="tag" id="mode" title="">Simulation</span>
+    <div class="persona"><label for="persona">Signed in as</label>
+      <select id="persona"></select>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+  </div>
+</div>
+
+<main><div class="wrap" id="app"></div></main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ---------- tiny SHA-256 (sync) for the hash-chained audit ledger ---------- */
+const sha256=(()=>{
+  const primes=[];for(let n=2;primes.length<64;n++){if(primes.every(p=>n%p))primes.push(n)}
+  const frac=x=>((x-Math.floor(x))*0x100000000)>>>0;
+  const K=primes.map(p=>frac(Math.cbrt(p))), H0=primes.slice(0,8).map(p=>frac(Math.sqrt(p)));
+  const r=(x,n)=>(x>>>n)|(x<<(32-n));
+  return str=>{
+    const b=new TextEncoder().encode(str), l=b.length, len=((l+9+63)>>6)<<6;
+    const m=new Uint8Array(len);m.set(b);m[l]=0x80;
+    const dv=new DataView(m.buffer);dv.setUint32(len-4,(l*8)>>>0);dv.setUint32(len-8,Math.floor(l/0x20000000));
+    const H=H0.slice(), w=new Uint32Array(64);
+    for(let i=0;i<len;i+=64){
+      for(let t=0;t<16;t++)w[t]=dv.getUint32(i+t*4);
+      for(let t=16;t<64;t++){const a=w[t-15],c=w[t-2];w[t]=(w[t-16]+(r(a,7)^r(a,18)^(a>>>3))+w[t-7]+(r(c,17)^r(c,19)^(c>>>10)))>>>0}
+      let[a,bb,c,d,e,f,g,h]=H;
+      for(let t=0;t<64;t++){
+        const t1=(h+(r(e,6)^r(e,11)^r(e,25))+((e&f)^(~e&g))+K[t]+w[t])>>>0;
+        const t2=((r(a,2)^r(a,13)^r(a,22))+((a&bb)^(a&c)^(bb&c)))>>>0;
+        h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=bb;bb=a;a=(t1+t2)>>>0;
+      }
+      [a,bb,c,d,e,f,g,h].forEach((v,k)=>H[k]=(H[k]+v)>>>0);
+    }
+    return H.map(x=>x.toString(16).padStart(8,"0")).join("");
+  };
+})();
+
+/* ---------- reference data: what the platform team owns ---------- */
+const CLASSES=["Public","Internal","Confidential","Restricted"];
+const TIERS=["low","medium","high"];
+const MODELS={
+  "claude-opus-5-5":  {provider:"Anthropic (private endpoint)",hosting:"external",maxClass:2,rate:15,status:"active"},
+  "claude-sonnet-5-5":{provider:"Anthropic (private endpoint)",hosting:"external",maxClass:2,rate:3,status:"active"},
+  "claude-haiku-4-5": {provider:"Anthropic (private endpoint)",hosting:"external",maxClass:2,rate:1,status:"active"},
+  "gpt-oss-120b":     {provider:"self-hosted GPU pool, ap-southeast-2",hosting:"in-boundary",maxClass:3,rate:0.4,status:"active"},
+  "legacy-chat-v1":   {provider:"public SaaS API",hosting:"external",maxClass:1,rate:2,status:"deprecated"}
+};
+const TOOLS={
+  "crm.read":{sys:"CRM",mode:"read",cls:2,ent:"crm-reader"},
+  "crm.write":{sys:"CRM",mode:"write",cls:2,ent:"crm-writer"},
+  "core-banking.read":{sys:"Core banking",mode:"read",cls:3,ent:"cb-reader"},
+  "payments.refund":{sys:"Payments",mode:"write",cls:3,ent:"refund-approver"},
+  "portfolio.read":{sys:"Portfolio",mode:"read",cls:3,ent:"wealth-advisor"},
+  "research.search":{sys:"Research",mode:"read",cls:1,ent:"all-staff"},
+  "hris.read":{sys:"HRIS",mode:"read",cls:3,ent:"hr-partner"},
+  "policy-kb.search":{sys:"Policy KB",mode:"read",cls:1,ent:"all-staff"},
+  "cms.publish":{sys:"CMS",mode:"write",cls:0,ent:"content-publisher"},
+  "analytics.read":{sys:"Analytics",mode:"read",cls:1,ent:"marketing-analyst"},
+  "web.search":{sys:"Web",mode:"read",cls:0,ent:"all-staff"}
+};
+const BUS={
+  retail:{name:"Retail Banking",code:"RB",models:["claude-sonnet-5-5","claude-haiku-4-5","gpt-oss-120b"],maxClass:3,tools:["crm.read","crm.write","core-banking.read","payments.refund","policy-kb.search"],budget:400,used:236},
+  wealth:{name:"Wealth Management",code:"WM",models:["claude-opus-5-5","claude-sonnet-5-5","gpt-oss-120b"],maxClass:3,tools:["crm.read","crm.write","portfolio.read","research.search"],budget:250,used:118},
+  people:{name:"People & Culture",code:"PC",models:["gpt-oss-120b","claude-haiku-4-5"],maxClass:3,tools:["hris.read","policy-kb.search"],budget:80,used:22},
+  marketing:{name:"Marketing",code:"MK",models:["claude-sonnet-5-5","claude-haiku-4-5"],maxClass:1,tools:["cms.publish","analytics.read","web.search"],budget:150,used:131}
+};
+const USERS={
+  "j.okafor":{bu:"retail",role:"Branch officer",groups:["all-staff","crm-reader","cb-reader"]},
+  "m.rossi":{bu:"retail",role:"Disputes lead",groups:["all-staff","crm-reader","crm-writer","cb-reader","refund-approver"]},
+  "t.adeyemi":{bu:"retail",role:"Contractor",groups:["all-staff"]},
+  "s.patel":{bu:"wealth",role:"Associate adviser",groups:["all-staff","crm-reader","wealth-advisor"]},
+  "l.nguyen":{bu:"people",role:"HR business partner",groups:["all-staff","hr-partner"]},
+  "k.berg":{bu:"marketing",role:"Content lead",groups:["all-staff","content-publisher","marketing-analyst"]}
+};
+const GUARDRAILS=[
+  ["GR-01","Every agent has a named owner and its own workload identity (SPIFFE ID). No shared keys.","Admission · Agent Gateway"],
+  ["GR-02","Agents call only active models from the enterprise catalog that their BU is entitled to.","Admission · Model Gateway"],
+  ["GR-03","Data never reaches a model or tool cleared for a lower classification.","Admission · Model Gateway · Tool Gateway"],
+  ["GR-04","Personal data is redacted before a prompt leaves the network boundary.","Model Gateway"],
+  ["GR-05","An agent never acts with more access than the person it serves (on-behalf-of token).","Identity Broker · Tool Gateway"],
+  ["GR-06","Write actions by high-risk agents wait for a named human approver.","Admission · Tool Gateway"],
+  ["GR-07","Token spend stays inside the BU's monthly allocation.","Admission · Model Gateway"],
+  ["GR-08","Every decision, allowed or denied, goes to the tamper-evident audit ledger.","All enforcement points"],
+  ["GR-09","Medium and high-risk agents carry passing eval evidence; high risk needs Risk Office sign-off.","Admission"],
+  ["GR-10","An agent serves its own BU's users unless it is published enterprise-wide.","Agent Gateway"]
+];
+const PERSONAS={platform:"Platform governance (all BUs)",retail:"Retail Banking admin",wealth:"Wealth Management admin",people:"People & Culture admin",marketing:"Marketing admin"};
+
+/* ---------- mutable state ---------- */
+const state={
+  persona:"platform", tab:"overview", flow:"request", archSel:"admission",
+  bundle:{retail:14,wealth:9,people:4,marketing:7},
+  agents:[], audit:[], tamper:null, chain:null, lastRun:null, presetIx:0,
+  auditBu:"all", auditDecision:"all"
+};
+const SEED=[
+  {bu:"retail",name:"branch-assist",owner:"j.okafor@corp.example",purpose:"Drafts replies to customer emails for branch staff",models:["claude-haiku-4-5","claude-sonnet-5-5"],cls:2,tools:["crm.read","policy-kb.search"],tier:"medium",evalScore:0.93,hitl:false,customerFacing:false,tokens:40,version:"1.4.0"},
+  {bu:"retail",name:"dispute-resolver",owner:"m.rossi@corp.example",purpose:"Investigates card disputes and proposes refunds",models:["claude-sonnet-5-5","gpt-oss-120b"],cls:3,tools:["core-banking.read","crm.read","payments.refund"],tier:"high",evalScore:0.95,hitl:true,customerFacing:false,tokens:60,version:"2.1.0"},
+  {bu:"wealth",name:"advisor-copilot",owner:"s.patel@corp.example",purpose:"Prepares client review packs and CRM notes",models:["claude-opus-5-5","gpt-oss-120b"],cls:3,tools:["portfolio.read","crm.read","crm.write","research.search"],tier:"high",evalScore:0.94,hitl:true,customerFacing:false,tokens:50,version:"3.0.2"},
+  {bu:"people",name:"hr-helpdesk",owner:"l.nguyen@corp.example",purpose:"Answers leave and policy questions for employees",models:["gpt-oss-120b"],cls:3,tools:["hris.read","policy-kb.search"],tier:"medium",evalScore:0.9,hitl:false,customerFacing:false,tokens:15,version:"1.0.3"},
+  {bu:"marketing",name:"campaign-writer",owner:"k.berg@corp.example",purpose:"Drafts and publishes campaign landing copy",models:["claude-sonnet-5-5","claude-haiku-4-5"],cls:1,tools:["cms.publish","analytics.read","web.search"],tier:"medium",evalScore:0.88,hitl:false,customerFacing:true,tokens:30,version:"0.9.0"},
+  {bu:"marketing",name:"seo-scout",owner:"k.berg@corp.example",purpose:"Scans competitor pages for keyword gaps",models:["claude-haiku-4-5"],cls:0,tools:["web.search"],tier:"low",evalScore:null,hitl:false,customerFacing:false,tokens:5,version:"0.3.1"}
+];
+const PRESETS=[
+  {label:"Branch email draft",note:"allowed, PII redacted",agent:"retail/branch-assist",user:"j.okafor",kind:"model",model:"claude-sonnet-5-5",cls:2,pii:true,tool:"crm.read"},
+  {label:"Restricted prompt",note:"rerouted in-boundary",agent:"retail/dispute-resolver",user:"m.rossi",kind:"model",model:"claude-sonnet-5-5",cls:3,pii:true,tool:"core-banking.read"},
+  {label:"Refund by high-risk agent",note:"held for approval",agent:"retail/dispute-resolver",user:"m.rossi",kind:"tool",model:"gpt-oss-120b",cls:3,pii:false,tool:"payments.refund"},
+  {label:"CRM write, user lacks rights",note:"denied, on-behalf-of",agent:"wealth/advisor-copilot",user:"s.patel",kind:"tool",model:"gpt-oss-120b",cls:2,pii:false,tool:"crm.write"},
+  {label:"Confidential brief to Marketing",note:"denied, data class",agent:"marketing/campaign-writer",user:"k.berg",kind:"model",model:"claude-sonnet-5-5",cls:2,pii:false,tool:"web.search"},
+  {label:"Suspended agent",note:"denied, kill switch",agent:"marketing/seo-scout",user:"k.berg",kind:"model",model:"claude-haiku-4-5",cls:0,pii:false,tool:"web.search"},
+  {label:"Cross-BU call",note:"denied, audience",agent:"people/hr-helpdesk",user:"j.okafor",kind:"model",model:"gpt-oss-120b",cls:1,pii:false,tool:"policy-kb.search"}
+];
+const DRAFTS=[
+  {label:"Mortgage pre-qualifier",note:"admits with a routing warning",d:{bu:"retail",name:"mortgage-prequal",owner:"priya.shah@corp.example",purpose:"Checks mortgage pre-qualification against serviceability rules",models:["claude-sonnet-5-5","gpt-oss-120b"],cls:3,tools:["core-banking.read","crm.read"],tier:"medium",evalScore:0.91,hitl:false,customerFacing:false,tokens:35}},
+  {label:"Collections agent",note:"high risk, needs sign-off",d:{bu:"retail",name:"collections-agent",owner:"m.rossi@corp.example",purpose:"Arranges hardship payment plans with customers",models:["gpt-oss-120b"],cls:3,tools:["core-banking.read","crm.write"],tier:"high",evalScore:0.92,hitl:true,customerFacing:true,tokens:45}},
+  {label:"Campaign agent on Opus",note:"rejected",d:{bu:"marketing",name:"brand-voice",owner:"k.berg@corp.example",purpose:"Rewrites partner copy in house style",models:["claude-opus-5-5","legacy-chat-v1"],cls:2,tools:["cms.publish","web.search"],tier:"medium",evalScore:0.9,hitl:false,customerFacing:false,tokens:20}}
+];
+let draft=structuredClone(DRAFTS[0].d);
+let run=structuredClone(PRESETS[0]);
+
+/* ---------- live mode: served by the control plane, every action calls the real services ---------- */
+let LIVE=false, GW="", dryT=null;
+async function api(path,opt={}){
+  const r=await fetch(path,{...opt,headers:{"Content-Type":"application/json","X-Persona":state.persona,...(opt.headers||{})}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){const d=j.detail;throw new Error(typeof d==="string"?d:(d?.message||`Request failed (HTTP ${r.status})`))}
+  return j;
+}
+const replaceAll=(obj,src)=>{for(const k of Object.keys(obj))delete obj[k];Object.assign(obj,src)};
+async function refresh(){
+  const [ref,agents,audit]=await Promise.all([api("/api/reference"),api("/api/agents"),api("/api/audit")]);
+  replaceAll(MODELS,ref.models);replaceAll(TOOLS,ref.tools);replaceAll(BUS,ref.bus);replaceAll(USERS,ref.users);
+  state.agents=agents;state.audit=audit.events;state.tamper=audit.tampered.length?{seq:audit.tampered[0]}:null;
+}
+function liveDry(){
+  clearTimeout(dryT);
+  dryT=setTimeout(async()=>{try{state.dry=await api("/api/admission/dry-run",{method:"POST",body:JSON.stringify(draft)})}catch(e){state.dry=null}render()},200);
+}
+async function liveInit(){
+  try{
+    if(!location.protocol.startsWith("http"))return;
+    const h=await fetch("/api/health",{cache:"no-store"}).then(r=>r.ok?r.json():null);
+    if(!h||!h.ok)return;
+  }catch(_){return}
+  LIVE=true;
+  const ref=await api("/api/reference");GW=ref.gateway_url;
+  PRESETS.splice(0,PRESETS.length,...ref.presets);DRAFTS.splice(0,DRAFTS.length,...ref.drafts);
+  draft=structuredClone(DRAFTS[0].d);run=structuredClone(PRESETS[0]);
+  await refresh();state.lastRun=null;state.chain=null;state.dry=null;liveDry();render();
+}
+async function liveRun(){
+  state.busy=true;render();
+  try{
+    const tok=await fetch("/idp/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"user="+encodeURIComponent(run.user)}).then(r=>r.json());
+    const [bu,name]=run.agent.split("/");
+    const body={kind:run.kind,model:run.model,cls:run.cls,prompt:run.prompt||"",tool:run.tool,args:run.args||{}};
+    const r=await fetch(`${GW}/agents/${bu}/${name}/invoke`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+tok.access_token},body:JSON.stringify(body)}).then(x=>x.json());
+    state.lastRun={steps:r.steps,decision:r.decision,key:r.key,ev:{action:r.action,hash:r.correlation_id,seq:r.events.at(-1)?.seq},q:{...run},output:r.output,served:r.served_model,ms:r.ms};
+    await refresh();
+  }finally{state.busy=false}
+}
+const LIVE_MSG={suspend:"suspended. Its SVID is revoked and the PDP denies it now.",reinstate:"reinstated.",approve:"approved. It can now get an SVID.",reject:"rejected."};
+async function liveAct(act,id){
+  try{
+    switch(act){
+      case "deploy":{const r=await api("/api/agents",{method:"POST",body:JSON.stringify(draft)});await refresh();liveDry();
+        toast(r.agent.status==="pending"?`${aid(r.agent)} registered as pending. Risk Office approves it in the Registry.`:`${aid(r.agent)} admitted with bundle ${r.agent.bundle}. It can take requests now.`);break}
+      case "suspend":case "reinstate":case "approve":case "reject":await api(`/api/agents/${id}/${act}`,{method:"POST"});await refresh();toast(`${id} ${LIVE_MSG[act]}`);break;
+      case "preset":run=structuredClone(PRESETS[id]);await liveRun();break;
+      case "run":await liveRun();toast(`Request decided: ${DECISION_LABEL[state.lastRun.decision]}. Events written to the ledger.`);break;
+      case "verify":state.chain=await api("/api/audit/verify");break;
+      case "tamper":{const r=await api("/api/audit/tamper",{method:"POST"});await refresh();state.chain=null;toast(`Event #${r.tampered} rewritten from Denied to Allowed in the database. Now verify the chain.`);break}
+      case "untamper":await api("/api/audit/untamper",{method:"POST"});await refresh();state.chain=null;break;
+    }
+  }catch(e){toast(e.message)}
+  render();
+}
+
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const spiffe=a=>`spiffe://corp.example/bu/${a.bu}/agent/${a.name}`;
+const agentById=id=>state.agents.find(a=>`${a.bu}/${a.name}`===id);
+const aid=a=>`${a.bu}/${a.name}`;
+const list=xs=>xs.join(", ");
+const pill=(cls,txt)=>`<span class="pill ${cls}">${esc(txt??cls)}</span>`;
+const visibleAgents=()=>state.persona==="platform"?state.agents:state.agents.filter(a=>a.bu===state.persona);
+const allocated=bu=>state.agents.filter(a=>a.bu===bu&&a.status!=="rejected").reduce((s,a)=>s+a.tokens,0);
+const DECISION_LABEL={allow:"Allowed",obligations:"Allowed with obligations",hold:"Held for approval",deny:"Denied",admitted:"Admitted",pending:"Pending sign-off",rejected:"Rejected",suspended:"Suspended",active:"Active",reinstated:"Reinstated"};
+let clock=Date.parse("2026-10-08T08:40:00Z");
+const nowIso=()=>{clock+=37000+Math.floor(Math.random()*90000);return new Date(clock).toISOString().slice(0,19)+"Z"};
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,3200)}
+
+/* ---------- audit ledger: append-only, hash chained ---------- */
+const evBody=e=>JSON.stringify([e.seq,e.ts,e.kind,e.bu,e.agent,e.actor,e.action,e.decision,e.rule,e.detail]);
+function appendAudit(e){
+  const prev=state.audit.length?state.audit[state.audit.length-1].hash:"0".repeat(64);
+  const ev={seq:state.audit.length+1,ts:nowIso(),...e,prev};
+  ev.hash=sha256(prev+"|"+evBody(ev));
+  state.audit.push(ev);state.chain=null;return ev;
+}
+function verifyChain(){
+  let prev="0".repeat(64);
+  for(const e of state.audit){
+    if(e.prev!==prev||sha256(prev+"|"+evBody(e))!==e.hash)return{ok:false,seq:e.seq,n:state.audit.length};
+    prev=e.hash;
+  }
+  return{ok:true,n:state.audit.length,head:prev};
+}
+
+/* ---------- admission: deploy-time checks ---------- */
+function deriveRisk(d){
+  let score=0;const why=[];
+  if(d.cls===3){score+=2;why.push("Restricted data +2")}else if(d.cls===2){score+=1;why.push("Confidential data +1")}
+  const writes=d.tools.filter(t=>TOOLS[t].mode==="write");
+  if(writes.length){score+=1;why.push("write tools +1")}
+  if(writes.some(t=>TOOLS[t].cls===3)){score+=1;why.push("writes to Restricted systems +1")}
+  if(d.customerFacing){score+=1;why.push("customer-facing +1")}
+  return{score,tier:score>=3?"high":score>=1?"medium":"low",why:why.join(", ")||"no risk factors"};
+}
+function admit(d){
+  const bu=BUS[d.bu], C=[];
+  const add=(id,label,status,detail,rule)=>C.push({id,label,status,detail,rule});
+  const exists=state.agents.some(a=>a.bu===d.bu&&a.name===d.name);
+  if(!/^[a-z][a-z0-9-]{2,30}$/.test(d.name))add("A1","Ownership & identity","fail","Agent name must be 3 to 31 lowercase letters, digits or hyphens.","GR-01");
+  else if(exists)add("A1","Ownership & identity","fail",`${d.bu}/${d.name} is already registered. Pick another name.`,"GR-01");
+  else if(!/^[^@\s]+@corp\.example$/.test(d.owner))add("A1","Ownership & identity","fail","Owner must be a named corp.example mailbox, not a team alias or blank.","GR-01");
+  else add("A1","Ownership & identity","pass",`Owner ${d.owner}. Identity on admission: ${spiffe(d)}`,"GR-01");
+
+  const dep=d.models.filter(m=>MODELS[m].status!=="active");
+  if(!d.models.length)add("A2","Model catalog","fail","Choose at least one model.","GR-02");
+  else if(dep.length)add("A2","Model catalog","fail",`${list(dep)} is deprecated in the enterprise catalog. New deployments cannot use it.`,"GR-02");
+  else add("A2","Model catalog","pass","Every model is active in the enterprise catalog.","GR-02");
+
+  const notEnt=d.models.filter(m=>!bu.models.includes(m));
+  if(notEnt.length)add("A3","BU model entitlement","fail",`${bu.name} is not entitled to ${list(notEnt)}. A BU policy narrows the catalog; it cannot widen it.`,"GR-02");
+  else if(d.models.length)add("A3","BU model entitlement","pass",`All models are on ${bu.name}'s entitlement list.`,"GR-02");
+  else add("A3","BU model entitlement","fail","No models chosen.","GR-02");
+
+  if(d.cls>bu.maxClass)add("A4","Data clearance","fail",`${bu.name} caps agents at ${CLASSES[bu.maxClass]}; this manifest declares ${CLASSES[d.cls]}.`,"GR-03");
+  else{
+    const ok=d.models.filter(m=>MODELS[m].maxClass>=d.cls), low=d.models.filter(m=>MODELS[m].maxClass<d.cls);
+    if(!d.models.length)add("A4","Data clearance","fail","No models to check.","GR-03");
+    else if(!ok.length)add("A4","Data clearance","fail",`No chosen model is cleared for ${CLASSES[d.cls]} data. Add an in-boundary model such as gpt-oss-120b.`,"GR-03");
+    else if(low.length)add("A4","Data clearance","warn",`${list(low)} is cleared only to ${CLASSES[Math.max(...low.map(m=>MODELS[m].maxClass))]}. The gateway will route ${CLASSES[d.cls]} prompts to ${list(ok)}.`,"GR-03");
+    else add("A4","Data clearance","pass",`Every model is cleared for ${CLASSES[d.cls]} data.`,"GR-03");
+  }
+
+  const notTool=d.tools.filter(t=>!bu.tools.includes(t)), over=d.tools.filter(t=>TOOLS[t].cls>d.cls);
+  if(notTool.length)add("A5","Tool scope","fail",`${list(notTool)} is not approved for ${bu.name}.`,"GR-03");
+  else if(over.length)add("A5","Tool scope","fail",`${list(over)} returns ${CLASSES[Math.max(...over.map(t=>TOOLS[t].cls))]} data, above the agent's ${CLASSES[d.cls]} ceiling.`,"GR-03");
+  else add("A5","Tool scope","pass",d.tools.length?`${d.tools.length} tool${d.tools.length>1?"s":""}, all approved for ${bu.name} and within the data ceiling.`:"No tools. Model-only agent.","GR-03");
+
+  const r=deriveRisk(d), tier=TIERS[Math.max(TIERS.indexOf(d.tier),TIERS.indexOf(r.tier))];
+  if(TIERS.indexOf(d.tier)<TIERS.indexOf(r.tier))add("A6","Risk tier","fail",`Declared ${d.tier}, but the manifest scores ${r.score} (${r.why}), which is ${r.tier}.`,"GR-09");
+  else add("A6","Risk tier","pass",`Declared ${d.tier}; derived ${r.tier} (score ${r.score}: ${r.why}).`,"GR-09");
+
+  const need=tier==="high"?0.9:tier==="medium"?0.85:null;
+  if(need===null)add("A7","Evaluation evidence","pass","Not required at low tier.","GR-09");
+  else if(d.evalScore==null||!(d.evalScore>=need))add("A7","Evaluation evidence","fail",`${tier} tier needs an enterprise-safety-v3 score of at least ${need}; got ${d.evalScore??"none"}.`,"GR-09");
+  else add("A7","Evaluation evidence","pass",`enterprise-safety-v3 score ${d.evalScore} meets the ${need} bar for ${tier} tier.`,"GR-09");
+
+  const writes=d.tools.filter(t=>TOOLS[t].mode==="write");
+  if(tier==="high"&&writes.length&&!d.hitl)add("A8","Human oversight","fail",`High-risk agent with write tools (${list(writes)}) must send writes to a human approver.`,"GR-06");
+  else if(writes.length&&d.hitl)add("A8","Human oversight","pass",`Writes (${list(writes)}) go to a human approver.`,"GR-06");
+  else if(writes.length)add("A8","Human oversight","pass",`Writes (${list(writes)}) run unattended, which ${tier} tier allows.`,"GR-06");
+  else add("A8","Human oversight","pass","No write tools.","GR-06");
+
+  const free=bu.budget-allocated(d.bu);
+  if(!(d.tokens>0))add("A9","Budget allocation","fail","Request a monthly token allocation.","GR-07");
+  else if(d.tokens>free)add("A9","Budget allocation","fail",`Requests ${d.tokens}M tokens a month; ${bu.name} has ${free}M unallocated of ${bu.budget}M.`,"GR-07");
+  else add("A9","Budget allocation","pass",`${d.tokens}M tokens a month from ${free}M unallocated.`,"GR-07");
+
+  if(tier==="high")add("A10","Approval","pending","Risk Office sign-off needed. No identity is issued until then.","GR-09");
+  else add("A10","Approval","pass",`Auto-approved at ${tier} tier.`,"GR-09");
+
+  const failed=C.some(c=>c.status==="fail");
+  return{checks:C,outcome:failed?"rejected":tier==="high"?"pending":"admitted",tier};
+}
+
+/* ---------- runtime: one request through the enforcement points ---------- */
+function simulate(q){
+  const a=agentById(q.agent), u=USERS[q.user], bu=BUS[a.bu], steps=[];
+  let stop=false;
+  const add=(comp,check,status,detail,rule)=>{steps.push({comp,check,status,detail,rule});if(status==="deny"||status==="hold")stop=status==="deny"};
+  add("Agent Gateway","Authenticate user","pass",`OIDC token for ${q.user} verified (issuer idp.corp.example, MFA satisfied).`,"GR-01");
+  if(a.status==="suspended")add("Agent Gateway","Authenticate agent","deny",`${aid(a)} is suspended. Its SVID was revoked, so the gateway refuses the mTLS session.`,"GR-01");
+  else if(a.status!=="active")add("Agent Gateway","Authenticate agent","deny",`${aid(a)} is ${a.status}; no SVID has been issued.`,"GR-09");
+  else add("Agent Gateway","Authenticate agent","pass",`mTLS with ${spiffe(a)}; policy bundle ${a.bundle} loaded.`,"GR-01");
+  if(!stop){
+    if(u.bu!==a.bu)add("Policy Decision Point","Audience","deny",`${q.user} is in ${BUS[u.bu].name}; ${aid(a)} serves ${bu.name} only.`,"GR-10");
+    else add("Policy Decision Point","Audience","pass",`${q.user} (${u.role}) is in ${bu.name}, the agent's audience.`,"GR-10");
+  }
+  if(!stop){
+    const scopes=a.tools.filter(t=>u.groups.includes(TOOLS[t].ent)), dropped=a.tools.filter(t=>!scopes.includes(t));
+    add("Identity Broker","On-behalf-of token exchange","pass",`Scopes granted: ${scopes.length?list(scopes):"none"}.${dropped.length?` Dropped because ${q.user} lacks them: ${list(dropped)}.`:""}`,"GR-05");
+    q._scopes=scopes;
+  }
+  let served=null;
+  if(!stop&&q.kind==="model"){
+    let m=q.model;
+    if(!a.models.includes(m))add("Model Gateway","Model entitlement","deny",`${m} is not in ${aid(a)}'s manifest.`,"GR-02");
+    else if(!bu.models.includes(m)||MODELS[m].status!=="active")add("Model Gateway","Model entitlement","deny",`${m} is not available to ${bu.name}.`,"GR-02");
+    else add("Model Gateway","Model entitlement","pass",`${m} is in the manifest, the BU entitlement and the active catalog.`,"GR-02");
+    if(!stop){
+      if(q.cls>a.cls)add("Model Gateway","Data classification","deny",`Prompt classified ${CLASSES[q.cls]}; the agent's ceiling is ${CLASSES[a.cls]}.`,"GR-03");
+      else if(q.cls>MODELS[m].maxClass){
+        const alt=a.models.find(x=>MODELS[x].maxClass>=q.cls&&bu.models.includes(x)&&MODELS[x].status==="active");
+        if(alt){add("Model Gateway","Data classification","warn",`${m} is cleared to ${CLASSES[MODELS[m].maxClass]}. Rerouted to ${alt} (${MODELS[alt].hosting}).`,"GR-03");m=alt}
+        else add("Model Gateway","Data classification","deny",`${m} is cleared to ${CLASSES[MODELS[m].maxClass]} and the agent has no model cleared for ${CLASSES[q.cls]}.`,"GR-03");
+      }else add("Model Gateway","Data classification","pass",`${CLASSES[q.cls]} prompt is within the agent ceiling and ${m}'s clearance.`,"GR-03");
+    }
+    if(!stop){
+      const ext=MODELS[m].hosting==="external";
+      if(q.pii&&ext)add("Model Gateway","PII redaction","warn",`Redacted 3 entities (person name, account number, phone) before sending to ${MODELS[m].provider}.`,"GR-04");
+      else if(q.pii)add("Model Gateway","PII redaction","pass",`${m} runs inside the boundary; personal data may stay in the prompt at this class.`,"GR-04");
+      else add("Model Gateway","PII redaction","pass","No personal data detected.","GR-04");
+    }
+    if(!stop){
+      const pct=bu.used/bu.budget;
+      if(pct>=1)add("Model Gateway","Budget","deny",`${bu.name} has used its ${bu.budget}M token allocation.`,"GR-07");
+      else if(pct>=.85)add("Model Gateway","Budget","warn",`${bu.used}M of ${bu.budget}M tokens used (${Math.round(pct*100)}%). BU admin alerted at 85%.`,"GR-07");
+      else add("Model Gateway","Budget","pass",`${bu.used}M of ${bu.budget}M tokens used (${Math.round(pct*100)}%). Spend metered to ${aid(a)}.`,"GR-07");
+      served=m;
+    }
+  }
+  if(!stop&&q.kind==="tool"){
+    const t=TOOLS[q.tool];
+    if(!a.tools.includes(q.tool))add("Tool Gateway","Manifest scope","deny",`${q.tool} is not declared in ${aid(a)}'s manifest.`,"GR-02");
+    else add("Tool Gateway","Manifest scope","pass",`${q.tool} is declared in the manifest.`,"GR-02");
+    if(!stop){
+      if(!q._scopes.includes(q.tool))add("Tool Gateway","On-behalf-of scope","deny",`${q.user} is not in group ${t.ent}, so the token carries no ${q.tool} scope. The agent cannot do what its user cannot.`,"GR-05");
+      else add("Tool Gateway","On-behalf-of scope","pass",`${q.user} holds ${t.ent}; token carries ${q.tool}.`,"GR-05");
+    }
+    if(!stop)add("Tool Gateway","Data classification","pass",`${t.sys} returns ${CLASSES[t.cls]} data, within the ${CLASSES[a.cls]} ceiling.`,"GR-03");
+    if(!stop){
+      if(t.mode==="write"&&(a.tier==="high"||a.hitl))add("Tool Gateway","Human oversight","hold",`Write to ${t.sys} queued for a second approver in the ${bu.name} case queue. The requester cannot approve it.`,"GR-06");
+      else if(t.mode==="write")add("Tool Gateway","Human oversight","pass",`Write allowed unattended at ${a.tier} tier.`,"GR-06");
+      else add("Tool Gateway","Human oversight","pass","Read-only call.","GR-06");
+    }
+  }
+  const deny=steps.find(s=>s.status==="deny"), hold=steps.find(s=>s.status==="hold"), warn=steps.filter(s=>s.status==="warn");
+  const decision=deny?"deny":hold?"hold":warn.length?"obligations":"allow";
+  const key=deny||hold||warn[0]||steps[steps.length-1];
+  const action=q.kind==="model"?`model.call ${q.model}${served&&served!==q.model?` → ${served}`:""} [${CLASSES[q.cls]}${q.pii?", PII":""}]`:`tool.call ${q.tool}`;
+  const ev=appendAudit({kind:"runtime",bu:a.bu,agent:aid(a),actor:q.user,action,decision,rule:key.rule,detail:key.detail});
+  steps.push({comp:"Audit Ledger",check:"Record decision","status":"pass",detail:`Event #${ev.seq} appended and chained to #${ev.seq-1} (${ev.hash.slice(0,12)}…).`,rule:"GR-08"});
+  return{steps,decision,key,ev,q:{...q}};
+}
+
+/* ---------- registry actions ---------- */
+function register(d,res){
+  const a={...structuredClone(d),tier:res.tier,status:res.outcome==="pending"?"pending":"active",version:d.version||"1.0.0"};
+  state.bundle[a.bu]++;a.bundle=`${BUS[a.bu].code.toLowerCase()}-${state.bundle[a.bu]}`;
+  state.agents.push(a);
+  const warns=res.checks.filter(c=>c.status==="warn").map(c=>c.id);
+  appendAudit({kind:"admission",bu:a.bu,agent:aid(a),actor:a.owner.split("@")[0],action:`deploy ${a.version}, tier ${a.tier}`,decision:res.outcome,rule:"GR-09",detail:`${res.checks.length} checks${warns.length?`, warnings ${list(warns)}`:""}; bundle ${a.bundle}`});
+  return a;
+}
+const actorName=()=>state.persona==="platform"?"risk-office":`${state.persona}-admin`;
+function setStatus(id,status,why,actor){
+  const a=agentById(id);a.status=status;
+  appendAudit({kind:"control",bu:a.bu,agent:id,actor:actor||actorName(),action:why,decision:status==="active"?"reinstated":status,rule:status==="suspended"?"GR-01":"GR-09",detail:`${id} is now ${status}`});
+}
+
+/* ---------- seed: registry + history ---------- */
+for(const s of SEED){const res=admit(s);const a=register(s,res);a.status="active";}
+for(const a of state.agents.filter(a=>a.tier==="high"))appendAudit({kind:"control",bu:a.bu,agent:aid(a),actor:"risk-office",action:"Risk Office sign-off",decision:"active",rule:"GR-09",detail:`${aid(a)} approved; SVID issued`});
+setStatus("marketing/seo-scout","suspended","kill switch: scraping a site whose terms forbid it","marketing-admin");
+for(const p of PRESETS)state.lastRun=simulate(structuredClone(p));
+state.lastRun=simulate(structuredClone(PRESETS[0]));
+
+/* ---------- views ---------- */
+const TABS=[["overview","Overview"],["deploy","Deploy an agent"],["registry","Registry"],["policy","Policy"],["runtime","Runtime"],["audit","Audit"]];
+
+const NODES=[
+  {id:"buteams",x:20,y:60,w:150,h:70,t:"BU delivery teams",s:"agent.yaml + evals",z:"ext"},
+  {id:"admission",x:220,y:60,w:151,h:70,t:"Admission Controller",s:"deploy-time checks",z:"cp"},
+  {id:"registry",x:383,y:60,w:151,h:70,t:"Agent Registry",s:"inventory, kill switch",z:"cp"},
+  {id:"pap",x:546,y:60,w:151,h:70,t:"Policy Admin",s:"layered bundles",z:"cp"},
+  {id:"identity",x:709,y:60,w:151,h:70,t:"Identity Broker",s:"SPIFFE CA, OBO",z:"cp"},
+  {id:"catalog",x:220,y:145,w:151,h:70,t:"Model Catalog",s:"clearance, status",z:"cp"},
+  {id:"budget",x:383,y:145,w:151,h:70,t:"Budget & Quota",s:"BU allocations",z:"cp"},
+  {id:"evidence",x:546,y:145,w:151,h:70,t:"Evidence & Reports",s:"evals, attestations",z:"cp"},
+  {id:"ledger",x:709,y:145,w:151,h:70,t:"Audit Ledger",s:"append-only, chained",z:"cp"},
+  {id:"idp",x:910,y:60,w:150,h:70,t:"Enterprise IdP",s:"OIDC, groups",z:"ext"},
+  {id:"siem",x:910,y:145,w:150,h:70,t:"SIEM / GRC",s:"alerts, attestation",z:"ext"},
+  {id:"users",x:20,y:430,w:150,h:70,t:"Employees",s:"SSO session",z:"ext"},
+  {id:"agentgw",x:220,y:350,w:120,h:230,t:"Agent Gateway",s:"PEP + local PDP",z:"pep"},
+  {id:"t-retail",x:370,y:350,w:280,h:52,t:"Retail Banking",s:"branch-assist · dispute-resolver",z:"bu"},
+  {id:"t-wealth",x:370,y:410,w:280,h:52,t:"Wealth Management",s:"advisor-copilot",z:"bu"},
+  {id:"t-people",x:370,y:470,w:280,h:52,t:"People & Culture",s:"hr-helpdesk",z:"bu"},
+  {id:"t-marketing",x:370,y:530,w:280,h:52,t:"Marketing",s:"campaign-writer · seo-scout",z:"bu"},
+  {id:"modelgw",x:680,y:350,w:180,h:105,t:"Model Gateway",s:"PEP + local PDP",z:"pep"},
+  {id:"toolgw",x:680,y:475,w:180,h:105,t:"Tool / MCP Gateway",s:"PEP + local PDP",z:"pep"},
+  {id:"providers",x:910,y:350,w:150,h:105,t:"Model providers",s:"private + in-boundary",z:"ext"},
+  {id:"systems",x:910,y:475,w:150,h:105,t:"Enterprise systems",s:"CRM, core, HRIS, CMS",z:"ext"}
+];
+const NODE_INFO={
+  buteams:["BU-owned","Each BU builds, tests and ships its own agents. They submit a manifest and eval evidence through their normal CI pipeline. They never get raw model keys or tool credentials."],
+  admission:["Platform-owned","Runs the A1–A10 checks on every deploy and redeploy: ownership, catalog, BU entitlement, data clearance, tool scope, risk tier, evals, oversight, budget and approval. A failed check blocks the deploy. Try it on the Deploy tab."],
+  registry:["Platform-owned, BU-visible","The single inventory of every agent, its owner, version, tier and status. Suspending an agent revokes its SVID, so every gateway refuses it within one token lifetime. BU admins can suspend their own agents."],
+  pap:["Platform writes global layer, BUs write theirs","Holds three policy layers: global guardrails, BU policy and the agent manifest. Compiles them into a signed bundle per agent. Lower layers can only narrow what the layer above allows. Bundles are pushed to every PDP."],
+  identity:["Platform-owned","Issues each admitted agent a SPIFFE workload identity (short-lived X.509 SVID). At request time it performs OAuth 2.0 token exchange (RFC 8693) so the agent gets an on-behalf-of token scoped to agent ∩ user rights."],
+  catalog:["Platform-owned","Approved models with their hosting, data clearance, chargeback rate and lifecycle status. Deprecating a model blocks new deploys at once and drives a migration report for agents still using it."],
+  budget:["Platform sets caps, BUs allocate","Monthly token allocation per BU, divided among its agents at admission. The model gateway meters every call against it, alerts at 85% and stops at 100%."],
+  evidence:["Platform-owned","Stores eval reports, red-team results, approvals and model cards against each agent version. Generates audit packs for internal audit and regulators from the ledger."],
+  ledger:["Platform-owned, read-only to all","Append-only log of every admission, control action and runtime decision, each event hash-chained to the previous one and stored write-once (object lock). Streamed to the SIEM. Try tampering on the Audit tab."],
+  idp:["Enterprise","Okta or Entra ID. Source of user identity and group membership. Groups map to tool entitlements, which bound what an agent may do for that user."],
+  siem:["Enterprise security","Receives the audit stream for detection rules (spikes in denials, a suspended agent retrying, budget runaways) and feeds GRC attestation."],
+  users:["Enterprise","People who invoke agents through chat, apps or workflows. Their SSO token travels with every request."],
+  agentgw:["Platform-run, shared","Front door to every agent. Verifies the user's token and the agent's SVID, checks audience and status with the local PDP, and stamps a correlation ID used by every later hop."],
+  "t-retail":["BU-owned runtime","BU tenant namespace. The BU picks its framework and release cadence. Egress is closed except through the model and tool gateways."],
+  "t-wealth":["BU-owned runtime","BU tenant namespace. Same contract: only the gateways are reachable."],
+  "t-people":["BU-owned runtime","BU tenant namespace. People & Culture is entitled only to in-boundary and small models."],
+  "t-marketing":["BU-owned runtime","BU tenant namespace. Capped at Internal data by BU policy."],
+  modelgw:["Platform-run, shared","The only egress to models. Enforces model entitlement, data-class routing, PII redaction and budget, then meters tokens to the agent. Holds no business logic of its own."],
+  toolgw:["Platform-run, shared","The only path to enterprise systems and MCP servers. Checks the tool is in the manifest and in the on-behalf-of token, and holds high-risk writes for a human approver."],
+  providers:["External and in-boundary","Model endpoints reached only through the model gateway, with platform-held credentials."],
+  systems:["System owners","CRM, core banking, payments, HRIS, CMS. They trust the tool gateway's token, not the agent."]
+};
+const EDGES=[
+  // [path, class, arrow?, label, lx, ly]
+  ["M170 95 H214","",1,"",0,0],
+  ["M860 95 H904","",1,"",0,0],["M910 95 H866","",1,"",0,0],
+  ["M860 180 H904","aud",1,"",0,0],
+  ["M170 465 H214","",1,"",0,0],
+  ["M340 465 H364","",1,"",0,0],
+  ["M650 402 H674","",1,"",0,0],
+  ["M650 527 H674","",1,"",0,0],
+  ["M860 402 H904","",1,"",0,0],
+  ["M860 527 H904","",1,"",0,0],
+  ["M280 244 V344","ctl",1,"SVID + bundle",290,286],
+  ["M510 244 V344","ctl",1,"admitted manifest",520,286],
+  ["M740 244 V344","ctl",1,"entitlements, quotas",640,286],
+  ["M840 344 V221","aud",1,"audit events",850,286]
+];
+function archSvg(){
+  const n=NODES.map(n=>{
+    const cls=n.z==="ext"?"ext":n.z==="pep"?"pep":"";
+    return `<g class="node ${cls} ${state.archSel===n.id?"sel":""}" data-act="arch" data-id="${n.id}" tabindex="0" role="button" aria-label="${esc(n.t)}">
+      <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="7"/>
+      <text class="t" x="${n.x+10}" y="${n.y+(n.h>80?24:28)}">${esc(n.t)}</text>
+      <text class="s" x="${n.x+10}" y="${n.y+(n.h>80?42:46)}">${esc(n.s)}</text>
+      ${n.id==="agentgw"?`<text class="s" x="${n.x+10}" y="${n.y+70}">token + SVID</text><text class="s" x="${n.x+10}" y="${n.y+86}">audience</text><text class="s" x="${n.x+10}" y="${n.y+102}">correlation id</text>`:""}
+      ${n.id==="modelgw"?`<text class="s" x="${n.x+10}" y="${n.y+62}">entitlement · class</text><text class="s" x="${n.x+10}" y="${n.y+78}">PII redaction · budget</text>`:""}
+      ${n.id==="toolgw"?`<text class="s" x="${n.x+10}" y="${n.y+62}">manifest · OBO scope</text><text class="s" x="${n.x+10}" y="${n.y+78}">human approval</text>`:""}
+    </g>`}).join("");
+  const e=EDGES.map(([d,c,a,l,lx,ly])=>`<path class="edge ${c}" d="${d}" marker-end="url(#ah${c?"-"+c:""})"/>${l?`<text class="elabel" x="${lx}" y="${ly}">${l}</text>`:""}`).join("");
+  const mk=(id,c)=>`<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="${c}" d="M0 0L10 5L0 10z"/></marker>`;
+  return `<svg viewBox="0 0 1080 625" role="img" aria-label="Control plane architecture">
+    <defs>${mk("ah","ah")}${mk("ah-ctl","ah-ctl")}${mk("ah-aud","ah-aud")}</defs>
+    <rect class="zone-cp" x="200" y="20" width="680" height="224" rx="12"/>
+    <text class="zone-label" x="216" y="44">CONTROL PLANE</text><text class="zone-note" x="350" y="44">platform team · one instance · no request traffic</text>
+    <rect class="zone-dp" x="200" y="310" width="680" height="300" rx="12"/>
+    <text class="zone-label" x="216" y="334">DATA PLANE</text><text class="zone-note" x="330" y="334">shared gateways + BU tenant runtimes · per region</text>
+    <text class="zone-note" x="20" y="44">BU-owned</text><text class="zone-note" x="910" y="44">enterprise</text>
+    <text class="zone-note" x="20" y="420">request path</text><text class="zone-note" x="910" y="340">external / systems of record</text>
+    ${e}${n}
+  </svg>`;
+}
+function seqSvg(lanes,msgs){
+  const gap=130,x0=72,w=x0*2+gap*(lanes.length-1),top=66,rowH=36,h=top+msgs.length*rowH+24;
+  const X=i=>x0+i*gap;
+  const L=lanes.map((l,i)=>`<g class="lane ${l.k||""}"><rect x="${X(i)-58}" y="8" width="116" height="40" rx="6"/>${l.t.split("\n").map((s,j,a)=>`<text x="${X(i)}" y="${32+(j-(a.length-1)/2)*14}" text-anchor="middle">${esc(s)}</text>`).join("")}</g><line class="life" x1="${X(i)}" y1="48" x2="${X(i)}" y2="${h-8}"/>`).join("");
+  const M=msgs.map(([f,t,label,ret],k)=>{
+    const y=top+k*rowH+16, x1=X(f), x2=X(t), dir=Math.sign(x2-x1), lx=Math.min(x1,x2)+10;
+    return `<path class="msg ${ret?"ret":""}" d="M${x1+dir*3} ${y} H${x2-dir*4}" marker-end="url(#sq)"/>
+      <g class="n"><circle cx="${x1+dir*12}" cy="${y}" r="8"/><text x="${x1+dir*12}" y="${y+3.5}" text-anchor="middle">${k+1}</text></g>
+      <text x="${dir>0?x1+26:x2+8}" y="${y-6}">${esc(label)}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" role="img"><defs><marker id="sq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>${L}${M}</svg>`;
+}
+const FLOWS={
+  deploy:{
+    title:"Deploy-time: admitting a BU agent",
+    lanes:[{t:"BU team\n(CI pipeline)"},{t:"Admission\nController",k:"cp"},{t:"Model\nCatalog",k:"cp"},{t:"Policy\nAdmin",k:"cp"},{t:"Risk Office"},{t:"Identity\nBroker",k:"cp"},{t:"Agent\nRegistry",k:"cp"},{t:"Gateways\n(PDPs)",k:"pep"}],
+    msgs:[[0,1,"agent.yaml + eval report"],[1,2,"models active, cleared?"],[1,3,"compile global ∧ BU ∧ agent"],[3,1,"bundle + narrow-only diff",1],[1,4,"sign-off (high tier only)"],[4,1,"approved, named approver",1],[1,5,"issue SPIFFE ID"],[1,6,"register v1.0.0, active"],[6,7,"push bundle + SVID trust"],[1,0,"admitted · audit event",1]],
+    steps:[
+      ["Submit","The BU pipeline posts the manifest (models, data class, tools, tier, budget, owner) with its eval report. Nothing is deployed yet."],
+      ["Catalog check","Every model must be active, entitled to the BU, and at least one must be cleared for the declared data class."],
+      ["Compile policy","Policy Admin intersects the three layers. If the BU or agent layer tries to widen anything, compilation fails."],
+      ["Bundle returned","A signed, versioned bundle (for example rb-15) plus a diff a reviewer can read."],
+      ["Risk sign-off","High-tier agents wait here. Medium and low tiers with passing checks continue automatically."],
+      ["Approval recorded","The approver's name goes into the evidence store against this agent version."],
+      ["Identity","The broker registers a workload identity. The runtime obtains short-lived SVIDs from it; there are no static keys."],
+      ["Register","The registry records owner, version, tier, bundle and status. This is the inventory audit sees."],
+      ["Distribute","Gateways pull the new bundle. Enforcement is local, so the control plane is not on the request path."],
+      ["Done","The pipeline gets the decision and every check result. The admission is written to the ledger."]
+    ]
+  },
+  request:{
+    title:"Request-time: one call through the enforcement points",
+    lanes:[{t:"Employee"},{t:"Agent\nGateway",k:"pep"},{t:"Agent\n(BU runtime)"},{t:"Identity\nBroker",k:"cp"},{t:"Local PDP"},{t:"Model\nGateway",k:"pep"},{t:"Tool\nGateway",k:"pep"},{t:"Audit\nLedger",k:"cp"}],
+    msgs:[[0,1,"request + OIDC token"],[1,4,"authorize invoke"],[4,1,"allow + obligations",1],[1,2,"forward, user ctx, corr-id"],[2,3,"token exchange (OBO)"],[3,2,"token: agent ∩ user",1],[2,5,"completion(model, prompt)"],[5,4,"model, class, budget?"],[5,2,"answer (PII redacted)",1],[2,6,"tool call + OBO token"],[6,4,"scope, write, tier?"],[6,2,"result / held",1],[6,7,"one event per hop"]],
+    steps:[
+      ["Enter","The employee's request reaches the agent gateway with their SSO token."],
+      ["Authorize","The gateway checks the token, the agent's SVID and status, and the audience rule against its local PDP. No network call to the control plane."],
+      ["Decision","Allow, plus any obligations (for example: log full prompt, redact PII)."],
+      ["Forward","The request reaches the BU's agent carrying the user context and a correlation ID."],
+      ["Exchange","The agent swaps the user token for an on-behalf-of token from the identity broker."],
+      ["Scoped token","Its scopes are the agent's declared tools intersected with what the user is entitled to."],
+      ["Model call","The agent calls a model only through the model gateway, which holds the provider credentials."],
+      ["Model policy","Entitlement, data class (with rerouting to an in-boundary model if needed), PII redaction and budget."],
+      ["Answer","The response returns, metered to the agent and BU."],
+      ["Tool call","The agent calls a tool through the tool gateway with the on-behalf-of token."],
+      ["Tool policy","Is the tool in the manifest and the token? Is it a write by a high-risk agent?"],
+      ["Result","The result, or a 'held for approval' receipt with a case number."],
+      ["Audit","Every enforcement point writes its decision, so a single correlation ID reconstructs the whole request."]
+    ]
+  }
+};
+
+function viewOverview(){
+  const ag=state.agents, rt=state.audit.filter(e=>e.kind==="runtime");
+  const info=NODE_INFO[state.archSel], node=NODES.find(n=>n.id===state.archSel), f=FLOWS[state.flow];
+  return `
+  <section class="view">
+    <div style="display:grid;gap:6px">
+      <p class="eyebrow">Design</p>
+      <h2 style="font-size:22px">Business units ship their own agents. The platform decides what any agent may touch.</h2>
+      <p class="lede">The control plane holds identity, policy, the model catalog, budgets and the audit ledger. BUs own their agent code, runtime and release cadence. Every agent request passes three shared enforcement points that evaluate policy locally, so the control plane is never on the hot path. Switch persona at the top right to see the same system as a BU admin.</p>
+    </div>
+    <div class="tiles">
+      <div class="tile"><span>Agents active</span><b>${ag.filter(a=>a.status==="active").length}</b></div>
+      <div class="tile"><span>Pending sign-off</span><b>${ag.filter(a=>a.status==="pending").length}</b></div>
+      <div class="tile"><span>Business units</span><b>${Object.keys(BUS).length}</b></div>
+      <div class="tile"><span>Runtime decisions</span><b>${rt.length}</b></div>
+      <div class="tile"><span>Denied or held</span><b>${rt.filter(e=>e.decision==="deny"||e.decision==="hold").length}</b></div>
+    </div>
+    <div class="panel">
+      <header><h2>Architecture</h2><span class="muted small">Select a component for its role and owner</span></header>
+      <div class="legend"><span><i></i>request path</span><span><i class="ctl"></i>configuration pushed to enforcement</span><span><i class="aud"></i>audit stream</span><span><i class="box"></i>enforcement point (PEP)</span></div>
+      <div class="scroll arch">${archSvg()}</div>
+      <div class="detail"><span class="who">${esc(info[0])}</span><h3>${esc(node.t)}</h3><p class="small">${esc(info[1])}</p></div>
+    </div>
+    <div class="panel">
+      <header><h2>Flows</h2>
+        <div class="seg" role="group" aria-label="Flow">
+          <button data-act="flow" data-id="request" aria-pressed="${state.flow==="request"}">Request-time</button>
+          <button data-act="flow" data-id="deploy" aria-pressed="${state.flow==="deploy"}">Deploy-time</button>
+        </div>
+      </header>
+      <p class="sub">${esc(f.title)}. Dashed arrows are responses.</p>
+      <div class="scroll seq">${seqSvg(f.lanes,f.msgs)}</div>
+      <ol class="steps">${f.steps.map(([b,t])=>`<li><span><b>${esc(b)}.</b> ${esc(t)}</span></li>`).join("")}</ol>
+    </div>
+    <div class="cols">
+      <div class="panel own"><h3>The platform team owns</h3><ul>
+        <li>Global guardrails GR-01 to GR-10, which no BU can switch off</li>
+        <li>The model catalog, provider credentials and data clearances</li>
+        <li>Workload identity and on-behalf-of token exchange</li>
+        <li>The three gateways and the policy engine inside them</li>
+        <li>The audit ledger, retention and evidence packs</li>
+        <li>Risk Office sign-off for high-tier agents</li></ul></div>
+      <div class="panel own"><h3>Each business unit owns</h3><ul>
+        <li>Agent code, framework, prompts and release cadence</li>
+        <li>Its tenant runtime and CI pipeline</li>
+        <li>A BU policy that narrows the global one (models, data ceiling, tools)</li>
+        <li>Splitting its token allocation among its agents</li>
+        <li>Eval suites and the named owner for each agent</li>
+        <li>Suspending its own agents without a ticket</li></ul></div>
+      <div class="panel own"><h3>Design rules</h3><ul>
+        <li><b>Narrow-only layering.</b> Effective policy is global ∧ BU ∧ agent ∧ user.</li>
+        <li><b>Gateways, not SDKs.</b> Enforcement sits on the network path, so a BU cannot forget to call it.</li>
+        <li><b>Local decisions.</b> PDPs run beside each gateway on pushed bundles; a control-plane outage stops new deploys, not traffic.</li>
+        <li><b>Fail closed.</b> Stale bundle past its TTL or no SVID means deny.</li>
+        <li><b>Deny is evidence.</b> Every refusal is audited with its rule ID.</li></ul></div>
+    </div>
+  </section>`;
+}
+
+function yamlOf(d){
+  return `apiVersion: controlplane.corp.example/v1
+kind: Agent
+metadata:
+  name: ${d.name}
+  businessUnit: ${d.bu}
+  owner: ${d.owner}
+spec:
+  purpose: "${d.purpose}"
+  riskTier: ${d.tier}
+  dataClassification: ${CLASSES[d.cls]}
+  customerFacing: ${d.customerFacing}
+  models: [${d.models.join(", ")}]
+  tools: [${d.tools.join(", ")}]
+  humanOversight:
+    writeActions: ${d.hitl?"require-approval":"none"}
+  budget:
+    monthlyTokens: ${d.tokens}M
+  evaluation:
+    suite: enterprise-safety-v3
+    score: ${d.evalScore??"null"}`;
+}
+function viewDeploy(){
+  if(state.persona!=="platform")draft.bu=state.persona;
+  const bu=BUS[draft.bu], res=LIVE&&state.dry?state.dry:admit(draft), locked=state.persona!=="platform";
+  return `
+  <section class="view">
+    <div style="display:grid;gap:6px"><p class="eyebrow">Self-service</p><h2>Deploy an agent</h2>
+      <p class="lede">A BU fills in a manifest; the admission controller checks it as you type${LIVE?" (Rego in OPA)":""}. Nothing reaches the registry until you deploy, and a rejected manifest cannot be deployed.</p></div>
+    <div class="presets"><span class="muted small" style="align-self:center">Examples:</span>${DRAFTS.map((p,i)=>`<button class="btn ghost sm" data-act="draft" data-id="${i}" ${locked&&p.d.bu!==state.persona?"disabled":""}>${esc(p.label)} <span class="muted">· ${esc(p.note)}</span></button>`).join("")}</div>
+    <div class="split">
+      <form class="panel form" id="draftForm" onsubmit="return false">
+        <h3>Manifest</h3>
+        <div class="two">
+          <div class="field"><label for="d-bu">Business unit</label><select id="d-bu" data-f="bu" ${locked?"disabled":""}>${Object.entries(BUS).map(([k,b])=>`<option value="${k}" ${k===draft.bu?"selected":""}>${b.name}</option>`).join("")}</select></div>
+          <div class="field"><label for="d-name">Agent name</label><input id="d-name" type="text" data-f="name" value="${esc(draft.name)}"></div>
+        </div>
+        <div class="field"><label for="d-owner">Owner</label><input id="d-owner" type="text" data-f="owner" value="${esc(draft.owner)}"></div>
+        <div class="field"><label for="d-purpose">Purpose</label><input id="d-purpose" type="text" data-f="purpose" value="${esc(draft.purpose)}"></div>
+        <div class="field"><span class="lbl">Models</span><div class="checks">${Object.entries(MODELS).map(([m,x])=>`<label><input type="checkbox" data-f="models" value="${m}" ${draft.models.includes(m)?"checked":""}> <span class="mono">${m}</span><span class="tag ${bu.models.includes(m)&&x.status==="active"?"":"off"}" title="${x.status==="active"?(bu.models.includes(m)?"Entitled for this BU":"Not entitled for this BU"):"Deprecated"}">${x.status==="deprecated"?"deprecated":`≤ ${CLASSES[x.maxClass]}`}</span></label>`).join("")}</div></div>
+        <div class="two">
+          <div class="field"><label for="d-cls">Data classification</label><select id="d-cls" data-f="cls">${CLASSES.map((c,i)=>`<option value="${i}" ${i===draft.cls?"selected":""}>${c}</option>`).join("")}</select></div>
+          <div class="field"><label for="d-tier">Declared risk tier</label><select id="d-tier" data-f="tier">${TIERS.map(t=>`<option ${t===draft.tier?"selected":""}>${t}</option>`).join("")}</select></div>
+        </div>
+        <div class="field"><span class="lbl">Tools</span><div class="checks">${Object.entries(TOOLS).map(([t,x])=>`<label><input type="checkbox" data-f="tools" value="${t}" ${draft.tools.includes(t)?"checked":""}> <span class="mono">${t}</span><span class="tag ${bu.tools.includes(t)?"":"off"}">${x.mode} · ${CLASSES[x.cls]}</span></label>`).join("")}</div></div>
+        <div class="two">
+          <div class="field"><label for="d-eval">Safety eval score</label><input id="d-eval" type="number" step="0.01" min="0" max="1" data-f="evalScore" value="${draft.evalScore??""}"></div>
+          <div class="field"><label for="d-tokens">Tokens / month (M)</label><input id="d-tokens" type="number" min="0" data-f="tokens" value="${draft.tokens}"></div>
+        </div>
+        <div class="inline">
+          <label><input type="checkbox" data-f="hitl" ${draft.hitl?"checked":""}> Writes need human approval</label>
+          <label><input type="checkbox" data-f="customerFacing" ${draft.customerFacing?"checked":""}> Customer-facing</label>
+        </div>
+        <p class="muted small">Struck-through tags are outside ${esc(bu.name)}'s policy. ${esc(bu.name)}: ${bu.budget-allocated(draft.bu)}M of ${bu.budget}M tokens unallocated; data ceiling ${CLASSES[bu.maxClass]}.</p>
+      </form>
+      <div style="display:grid;gap:18px;min-width:0">
+        <div class="panel">
+          <div class="verdict ${res.outcome}"><b>${DECISION_LABEL[res.outcome]}</b><span>${res.outcome==="rejected"?`${res.checks.filter(c=>c.status==="fail").length} check(s) failed. Fix them to deploy.`:res.outcome==="pending"?"Deploys as pending. Risk Office approves it in the Registry.":"All blocking checks pass."}</span>
+            <button class="btn" data-act="deploy" ${res.outcome==="rejected"?"disabled":""}>Deploy agent</button></div>
+          <div>${res.checks.map(c=>`<div class="ck"><span class="id">${c.id}</span><span class="lbl">${esc(c.label)}</span>${pill(c.status,c.status)}<span class="det">${esc(c.detail)} <span class="rule">${c.rule}</span></span></div>`).join("")}</div>
+        </div>
+        <div class="panel"><header><h3>agent.yaml</h3><span class="muted small">what the BU pipeline submits</span></header><pre class="yaml">${esc(yamlOf(draft))}</pre></div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function viewRegistry(){
+  const ag=visibleAgents(), plat=state.persona==="platform";
+  const rows=ag.map(a=>{
+    const id=aid(a);let act="";
+    if(a.status==="active")act=`<button class="btn ghost sm" data-act="suspend" data-id="${id}">Suspend</button>`;
+    else if(a.status==="suspended")act=`<button class="btn ghost sm" data-act="reinstate" data-id="${id}">Reinstate</button>`;
+    else if(a.status==="pending")act=plat?`<button class="btn sm" data-act="approve" data-id="${id}">Approve</button><button class="btn ghost sm" data-act="reject" data-id="${id}">Reject</button>`:`<span class="muted small">Waiting for Risk Office</span>`;
+    act+=`<button class="btn ghost sm" data-act="viewpolicy" data-id="${id}">Policy</button>`;
+    return `<tr><td><div class="agent-id">${esc(id)}</div><div class="muted small">${esc(a.purpose)}</div><div class="hash" title="${spiffe(a)}">${a.status==="active"?esc(spiffe(a)):a.status==="suspended"?"SVID revoked":"no SVID yet"}</div></td>
+      <td>${pill(a.status,DECISION_LABEL[a.status]||a.status)}</td><td>${pill(a.tier==="high"?"deny":a.tier==="medium"?"warn":"pass",a.tier)}</td>
+      <td class="small">${CLASSES[a.cls]}</td><td><div class="tags">${a.models.map(m=>`<span class="tag">${m}</span>`).join("")}</div></td>
+      <td class="num">${a.tokens}M</td><td class="num">${a.version}<br><span class="muted">${a.bundle}</span></td><td><div class="row-actions">${act}</div></td></tr>`}).join("");
+  return `
+  <section class="view">
+    <div style="display:grid;gap:6px"><p class="eyebrow">Inventory</p><h2>Agent registry</h2>
+      <p class="lede">${plat?"Every agent in every BU. Risk Office approves high-tier agents here; anyone with rights can pull the kill switch.":`${esc(PERSONAS[state.persona])} sees only ${esc(BUS[state.persona].name)} agents. Approval of high-tier agents belongs to the Risk Office.`} Suspending an agent revokes its SVID; try a request against it on the Runtime tab.</p></div>
+    <div class="panel"><div class="scroll"><table>
+      <thead><tr><th>Agent</th><th>Status</th><th>Tier</th><th>Data</th><th>Models</th><th>Budget</th><th>Version</th><th>Actions</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="8" class="muted">No agents yet. Deploy one from the Deploy tab.</td></tr>`}</tbody></table></div></div>
+    <div class="panel"><header><h2>Business units</h2><span class="muted small">BU policy layer and budget</span></header><div class="scroll"><table>
+      <thead><tr><th>BU</th><th>Entitled models</th><th>Data ceiling</th><th>Approved tools</th><th>Budget used</th><th>Allocated</th></tr></thead>
+      <tbody>${Object.entries(BUS).filter(([k])=>plat||k===state.persona).map(([k,b])=>`<tr><td><b>${b.name}</b></td><td><div class="tags">${b.models.map(m=>`<span class="tag">${m}</span>`).join("")}</div></td><td class="small">${CLASSES[b.maxClass]}</td><td><div class="tags">${b.tools.map(t=>`<span class="tag">${t}</span>`).join("")}</div></td><td class="num">${b.used}M / ${b.budget}M ${b.used/b.budget>=.85?pill("warn",Math.round(b.used/b.budget*100)+"%"):""}</td><td class="num">${allocated(k)}M</td></tr>`).join("")}</tbody></table></div></div>
+  </section>`;
+}
+
+let policyAgent="retail/dispute-resolver";
+function viewPolicy(){
+  const ag=visibleAgents();
+  if(!ag.find(a=>aid(a)===policyAgent))policyAgent=ag[0]?aid(ag[0]):null;
+  const a=policyAgent&&agentById(policyAgent);
+  if(!a)return `<section class="view"><div class="panel"><p>No agents visible for this persona.</p></div></section>`;
+  const bu=BUS[a.bu], activeCat=Object.keys(MODELS).filter(m=>MODELS[m].status==="active");
+  const effModels=a.models.filter(m=>bu.models.includes(m)&&activeCat.includes(m));
+  const effTools=a.tools.filter(t=>bu.tools.includes(t));
+  const ceiling=Math.min(bu.maxClass,a.cls);
+  const writes=effTools.filter(t=>TOOLS[t].mode==="write");
+  const tags=xs=>`<div class="tags">${xs.map(x=>`<span class="tag">${x}</span>`).join("")||"<span class='muted small'>none</span>"}</div>`;
+  const rows=[
+    ["Models",`Active catalog (${activeCat.length})`,tags(bu.models),tags(a.models),tags(effModels.map(m=>`${m} ≤ ${CLASSES[Math.min(MODELS[m].maxClass,ceiling)]}`))],
+    ["Data ceiling","Restricted only to in-boundary models",CLASSES[bu.maxClass],CLASSES[a.cls],`${CLASSES[ceiling]}, routed per model clearance`],
+    ["Tools","Registered in Tool Gateway",tags(bu.tools),tags(a.tools),`${tags(effTools)}<div class="muted small">then ∩ the user's groups at request time</div>`],
+    ["PII","Redact before external models","inherits","inherits","On for "+(effModels.filter(m=>MODELS[m].hosting==="external").join(", ")||"no models")],
+    ["Writes","High tier needs approver","inherits",a.hitl?"require-approval":"none",writes.length?(a.tier==="high"||a.hitl?"Held for human approval":"Unattended ("+a.tier+" tier)"):"No write tools"],
+    ["Budget","BU cap",`${bu.budget}M / month`,`${a.tokens}M / month`,`${a.tokens}M, hard stop at BU cap`],
+    ["Audit","All decisions, 7-year retention","inherits","inherits","On; cannot be disabled"],
+    ["Audience","Own BU only","inherits","inherits",`${bu.name} users`]
+  ];
+  const bundle={bundle:a.bundle,agent:spiffe(a),tier:a.tier,status:a.status,models:Object.fromEntries(effModels.map(m=>[m,{maxClass:CLASSES[Math.min(MODELS[m].maxClass,ceiling)],redactPII:MODELS[m].hosting==="external"}])),dataCeiling:CLASSES[ceiling],tools:Object.fromEntries(effTools.map(t=>[t,{mode:TOOLS[t].mode,requiresGroup:TOOLS[t].ent,approval:TOOLS[t].mode==="write"&&(a.tier==="high"||a.hitl)}])),budget:{monthlyTokens:a.tokens*1e6,alertAt:0.85,hardStop:true},audience:[`group:bu-${a.bu}`],audit:{level:"all",retentionYears:7},failMode:"closed",ttlSeconds:300};
+  return `
+  <section class="view">
+    <div style="display:grid;gap:6px"><p class="eyebrow">Policy</p><h2>Three layers, narrow only</h2>
+      <p class="lede">Global guardrails come from the platform team. A BU policy may remove options but never add them, and an agent manifest narrows further. The gateway enforces the intersection, then intersects again with the calling user's rights.</p></div>
+    <div class="cols">
+      <div class="panel layer"><h3>Global guardrails</h3>${GUARDRAILS.map(([id,t,at])=>`<div class="gr"><b>${id}</b><span>${esc(t)}</span><span class="at">${esc(at)}</span></div>`).join("")}</div>
+      <div class="panel" style="align-content:start">
+        <div class="field"><label for="p-agent">Agent</label><select id="p-agent" data-act-change="policyAgent">${ag.map(x=>`<option ${aid(x)===policyAgent?"selected":""}>${aid(x)}</option>`).join("")}</select></div>
+        <div class="scroll eff"><table><thead><tr><th></th><th>Global</th><th>BU · ${esc(bu.code)}</th><th>Agent</th><th>Effective</th></tr></thead>
+          <tbody>${rows.map(r=>`<tr><td><b class="small">${r[0]}</b></td><td class="small">${r[1]}</td><td class="small">${r[2]}</td><td class="small">${r[3]}</td><td class="small">${r[4]}</td></tr>`).join("")}</tbody></table></div>
+        <h3>Compiled bundle <span class="muted small" style="font-weight:400">pushed to every PDP</span></h3>
+        <pre class="yaml">${esc(JSON.stringify(bundle,null,2))}</pre>
+      </div>
+    </div>
+  </section>`;
+}
+
+function viewRuntime(){
+  const ag=state.agents, a=agentById(run.agent)||ag[0], r=state.lastRun;
+  if(!a.models.includes(run.model)&&run.kind==="model")run.model=a.models[0];
+  return `
+  <section class="view">
+    <div style="display:grid;gap:6px"><p class="eyebrow">Enforcement</p><h2>Send a request through the gateways</h2>
+      <p class="lede">${LIVE?"Live: requests go to the gateways on :8081 with a signed user token; OPA decides and Ollama answers. ":""}Pick a scenario or build your own. Each check runs against the live registry and policy, so a change on another tab (suspending an agent, deploying a new one) shows up here. Every run is written to the audit ledger.</p></div>
+    <div class="presets"><span class="muted small" style="align-self:center">Scenarios:</span>${PRESETS.map((p,i)=>`<button class="btn ghost sm" data-act="preset" data-id="${i}">${esc(p.label)} <span class="muted">· ${esc(p.note)}</span></button>`).join("")}</div>
+    <div class="split">
+      <form class="panel form" onsubmit="return false">
+        <h3>Request</h3>
+        <div class="field"><label for="r-agent">Agent</label><select id="r-agent" data-r="agent">${ag.map(x=>`<option ${aid(x)===run.agent?"selected":""}>${aid(x)}</option>`).join("")}</select></div>
+        <div class="field"><label for="r-user">Calling user</label><select id="r-user" data-r="user">${Object.entries(USERS).map(([k,u])=>`<option value="${k}" ${k===run.user?"selected":""}>${k} · ${u.role}, ${BUS[u.bu].code}</option>`).join("")}</select></div>
+        <div class="field"><span class="lbl">Call</span><div class="inline">
+          <label><input type="radio" name="kind" data-r="kind" value="model" ${run.kind==="model"?"checked":""}> Model</label>
+          <label><input type="radio" name="kind" data-r="kind" value="tool" ${run.kind==="tool"?"checked":""}> Tool</label></div></div>
+        ${run.kind==="model"?`
+        <div class="field"><label for="r-model">Model</label><select id="r-model" data-r="model">${Object.keys(MODELS).map(m=>`<option ${m===run.model?"selected":""}>${m}</option>`).join("")}</select></div>
+        ${LIVE?`<div class="field"><label for="r-cls">Prompt label</label><select id="r-cls" data-r="cls">${CLASSES.map((c,i)=>`<option value="${i}" ${i===run.cls?"selected":""}>${c}</option>`).join("")}</select></div>
+        <div class="field"><label for="r-prompt">Prompt</label><textarea id="r-prompt" data-r="prompt">${esc(run.prompt||"")}</textarea><span class="muted small">The gateway scans this for personal data and raises the label to Confidential if it finds any.</span></div>`:`
+        <div class="two"><div class="field"><label for="r-cls">Prompt classified as</label><select id="r-cls" data-r="cls">${CLASSES.map((c,i)=>`<option value="${i}" ${i===run.cls?"selected":""}>${c}</option>`).join("")}</select></div>
+        <div class="field"><span class="lbl">Content</span><label class="small" style="display:flex;gap:6px;align-items:center;padding-top:6px"><input type="checkbox" data-r="pii" ${run.pii?"checked":""}> Contains PII</label></div></div>`}`:`
+        <div class="field"><label for="r-tool">Tool</label><select id="r-tool" data-r="tool">${Object.keys(TOOLS).map(t=>`<option ${t===run.tool?"selected":""}>${t}</option>`).join("")}</select></div>`}
+        <p class="muted small">${esc(run.user)} is in groups: ${esc(list(USERS[run.user].groups))}.</p>
+        <button class="btn" data-act="run" ${state.busy?"disabled":""}>${state.busy?"Sending…":"Send request"}</button>
+      </form>
+      ${!r?`<div class="panel"><h3>No request sent yet</h3><p class="sub">Pick a scenario above or fill in the form. The request goes to the agent gateway with a signed user token, through OPA, the identity broker and the model or tool gateway${LIVE?", and a real model call to Ollama":""}.</p></div>`:`<div class="panel">
+        <div class="verdict ${r.decision}"><b>${DECISION_LABEL[r.decision]}</b><span>${esc(r.key.detail)}</span></div>
+        <p class="mono muted">${esc(r.q.user)} → ${esc(r.q.agent)} · ${esc(r.ev.action)} · corr-id ${r.ev.hash.slice(0,8)}</p>
+        ${r.output!=null?`<div class="out"><span class="muted">${esc(r.served?"Model output · "+r.served:"System response")}${r.ms?` · ${r.ms} ms`:""}</span>\n${esc(r.output)}</div>`:""}
+        <ol class="trace">${r.steps.map(s=>`<li><span class="dot ${s.status}">${{pass:"✓",warn:"!",deny:"✕",hold:"‖",skip:"–"}[s.status]}</span><div><div class="head"><span class="comp">${esc(s.comp)}</span><span class="chk">${esc(s.check)}</span>${pill(s.status,s.status)}<span class="rule">${s.rule}</span></div><p class="d">${esc(s.detail)}</p></div></li>`).join("")}</ol>
+      </div>`}
+    </div>
+  </section>`;
+}
+
+function viewAudit(){
+  const plat=state.persona==="platform";
+  let ev=state.audit.filter(e=>plat||e.bu===state.persona);
+  if(state.auditBu!=="all"&&plat)ev=ev.filter(e=>e.bu===state.auditBu);
+  if(state.auditDecision!=="all")ev=ev.filter(e=>e.decision===state.auditDecision);
+  const c=state.chain;
+  const decs=[...new Set(state.audit.map(e=>e.decision))];
+  return `
+  <section class="view">
+    <div style="display:grid;gap:6px"><p class="eyebrow">Evidence</p><h2>Audit ledger</h2>
+      <p class="lede">Every admission, control action and runtime decision${LIVE?" (one event per gateway hop, stored in SQLite with append-only triggers)":""}, each SHA-256 chained to the one before. Editing any past event breaks every hash after it. ${plat?"":"BU admins see their own BU's events."}</p></div>
+    <div class="tiles">
+      <div class="tile"><span>Events</span><b>${state.audit.length}</b></div>
+      <div class="tile"><span>Denied</span><b>${state.audit.filter(e=>e.decision==="deny").length}</b></div>
+      <div class="tile"><span>Held</span><b>${state.audit.filter(e=>e.decision==="hold").length}</b></div>
+      <div class="tile"><span>Chain head</span><b style="font-size:16px;padding-top:6px">${state.audit.at(-1).hash.slice(0,10)}…</b></div>
+    </div>
+    <div class="panel">
+      <div class="toolbar">
+        ${plat?`<label class="small" for="a-bu">BU</label><select id="a-bu" data-act-change="auditBu"><option value="all">All</option>${Object.entries(BUS).map(([k,b])=>`<option value="${k}" ${k===state.auditBu?"selected":""}>${b.name}</option>`).join("")}</select>`:""}
+        <label class="small" for="a-dec">Decision</label><select id="a-dec" data-act-change="auditDecision"><option value="all">All</option>${decs.map(d=>`<option value="${d}" ${d===state.auditDecision?"selected":""}>${DECISION_LABEL[d]||d}</option>`).join("")}</select>
+        <span style="margin-left:auto" class="row-actions">
+          <button class="btn sm" data-act="verify">Verify chain</button>
+          ${plat?(state.tamper?`<button class="btn ghost sm" data-act="untamper">Undo tampering</button>`:`<button class="btn ghost sm" data-act="tamper">Tamper with a denial</button>`):""}
+        </span>
+      </div>
+      ${c?`<div class="chain ${c.ok?"pass":"fail"}">${c.ok?`Chain intact. ${c.n} events recomputed; head ${c.head.slice(0,16)}… matches.`:`Chain broken at event #${c.seq}. Its stored hash no longer matches its contents, so every later event is suspect. In production the ledger is write-once storage and this alerts the SIEM.`}</div>`:""}
+      <div class="scroll"><table>
+        <thead><tr><th>#</th><th>Time (UTC)</th><th>Type</th><th>Agent</th><th>Actor</th><th>Action</th><th>Decision</th><th>Rule</th><th>Hash</th></tr></thead>
+        <tbody>${ev.slice().reverse().map(e=>`<tr class="${c&&!c.ok&&e.seq===c.seq?"broken":""}"><td class="num">${e.seq}</td><td class="num">${e.ts.slice(11,19)}</td><td class="small">${e.kind}</td><td class="agent-id">${esc(e.agent)}</td><td class="small">${esc(e.actor)}</td><td class="small" title="${esc(e.detail)}">${esc(e.action)}</td><td>${pill(e.decision,DECISION_LABEL[e.decision]||e.decision)}</td><td class="hash">${e.rule}</td><td class="hash" title="prev ${e.prev}">${e.hash.slice(0,10)}…</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>
+  </section>`;
+}
+
+const VIEWS={overview:viewOverview,deploy:viewDeploy,registry:viewRegistry,policy:viewPolicy,runtime:viewRuntime,audit:viewAudit};
+function render(){
+  const act=document.activeElement, fid=act&&act.id, sel=fid&&act.selectionStart!=null?[act.selectionStart,act.selectionEnd]:null;
+  const m=$("#mode");if(m){m.textContent=LIVE?"Live · OPA + gateways":"Simulation";m.title=LIVE?"Connected to the control plane; every action calls the real services.":"Runs entirely in the browser. Serve it from the control plane for live mode."}
+  $("#tabs").innerHTML=TABS.map(([k,l])=>`<button role="tab" aria-selected="${state.tab===k}" data-act="tab" data-id="${k}">${l}</button>`).join("");
+  $("#persona").innerHTML=Object.entries(PERSONAS).map(([k,l])=>`<option value="${k}" ${k===state.persona?"selected":""}>${l}</option>`).join("");
+  $("#app").innerHTML=VIEWS[state.tab]();
+  if(fid&&fid!=="persona"){const n=document.getElementById(fid);if(n&&n!==document.activeElement){n.focus();if(sel)try{n.setSelectionRange(...sel)}catch(_){}}}
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-act]");if(!el||el.disabled)return;
+  const id=el.dataset.id;
+  if(LIVE&&["deploy","suspend","reinstate","approve","reject","preset","run","verify","tamper","untamper"].includes(el.dataset.act)){liveAct(el.dataset.act,id);return}
+  switch(el.dataset.act){
+    case "tab":state.tab=id;try{history.replaceState(null,"","#"+id)}catch(_){}window.scrollTo(0,0);break;
+    case "arch":state.archSel=id;break;
+    case "flow":state.flow=id;break;
+    case "draft":draft=structuredClone(DRAFTS[id].d);if(LIVE)liveDry();break;
+    case "deploy":{const res=admit(draft);if(res.outcome==="rejected")return;const a=register(draft,res);toast(res.outcome==="pending"?`${aid(a)} registered as pending. Risk Office approves it in the Registry.`:`${aid(a)} admitted with bundle ${a.bundle}. It can take requests now.`);break}
+    case "suspend":setStatus(id,"suspended","kill switch");toast(`${id} suspended. Its SVID is revoked.`);break;
+    case "reinstate":setStatus(id,"active","reinstated");toast(`${id} reinstated.`);break;
+    case "approve":setStatus(id,"active","Risk Office sign-off");toast(`${id} approved. SVID issued.`);break;
+    case "reject":setStatus(id,"rejected","Risk Office rejected");toast(`${id} rejected.`);break;
+    case "viewpolicy":policyAgent=id;state.tab="policy";break;
+    case "preset":run=structuredClone(PRESETS[id]);state.lastRun=simulate(structuredClone(run));break;
+    case "run":state.lastRun=simulate(structuredClone(run));toast(`Event #${state.lastRun.ev.seq} written to the ledger.`);break;
+    case "verify":state.chain=verifyChain();break;
+    case "tamper":{const t=state.audit.slice().reverse().find(x=>x.decision==="deny");if(!t)return;state.tamper={seq:t.seq,decision:t.decision};t.decision="allow";state.chain=null;toast(`Event #${t.seq} rewritten from Denied to Allowed. Now verify the chain.`);break}
+    case "untamper":{const t=state.audit[state.tamper.seq-1];t.decision=state.tamper.decision;state.tamper=null;state.chain=null;break}
+    default:return;
+  }
+  render();
+});
+document.addEventListener("keydown",e=>{const el=e.target.closest?.("[data-act='arch']");if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();el.dispatchEvent(new MouseEvent("click",{bubbles:true}))}});
+document.addEventListener("change",e=>{
+  const el=e.target;
+  if(el.id==="persona"){state.persona=el.value;state.auditBu="all";if(state.persona!=="platform")draft.bu=state.persona;
+    if(LIVE){refresh().then(()=>{liveDry();render()}).catch(err=>toast(err.message));return}
+    render();return}
+  if(el.dataset.actChange){const k=el.dataset.actChange;if(k==="policyAgent")policyAgent=el.value;else state[k]=el.value;state.chain=state.chain;render();return}
+  if(el.dataset.f){
+    const f=el.dataset.f;
+    if(f==="models"||f==="tools"){const s=new Set(draft[f]);el.checked?s.add(el.value):s.delete(el.value);draft[f]=Object.keys(f==="models"?MODELS:TOOLS).filter(x=>s.has(x))}
+    else if(f==="hitl"||f==="customerFacing")draft[f]=el.checked;
+    else if(f==="cls")draft.cls=+el.value;
+    else if(f==="evalScore")draft.evalScore=el.value===""?null:+el.value;
+    else if(f==="tokens")draft.tokens=+el.value||0;
+    else draft[f]=el.value.trim();
+    if(LIVE)liveDry();
+    render();return;
+  }
+  if(el.dataset.r){
+    const f=el.dataset.r;
+    if(f==="prompt")return;
+    if(f==="pii")run.pii=el.checked;else if(f==="cls")run.cls=+el.value;else run[f]=el.value;
+    if(f==="agent"){const a=agentById(run.agent);run.model=a.models[0];run.tool=a.tools[0]||"web.search"}
+    render();
+  }
+});
+document.addEventListener("input",e=>{
+  const el=e.target;
+  if(el.dataset.r==="prompt"){run.prompt=el.value;return}
+  if(!el.dataset.f||el.type==="checkbox")return;
+  if(["name","owner","purpose"].includes(el.dataset.f)){draft[el.dataset.f]=el.value.trim();if(LIVE)liveDry();render()}
+});
+const h=(location.hash||"").slice(1);if(VIEWS[h])state.tab=h;
+render();
+liveInit();
+</script>

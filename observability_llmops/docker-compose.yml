@@ -1,0 +1,10 @@
+# Optional trace backend. Spans also go to traces/spans.jsonl and the web UI without it.
+#   docker compose up -d
+#   export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+#   then open http://localhost:16686 and pick service "support-agent"
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.10.0
+    ports:
+      - "16686:16686"   # UI
+      - "4318:4318"     # OTLP/HTTP

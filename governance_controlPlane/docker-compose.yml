@@ -1,0 +1,11 @@
+# Policy engine: the gateways' local PDP and the admission controller's rule engine.
+# The control plane pushes the registry and catalog to it at /v1/data/cp.
+#   docker compose up -d
+services:
+  opa:
+    image: openpolicyagent/opa:1.10.1
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-level=error", "/policies"]
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./policies:/policies:ro
