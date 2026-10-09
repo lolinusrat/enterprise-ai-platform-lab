@@ -1,0 +1,9 @@
+[
+  {"id": "ana",   "name": "Ana Ortiz",    "role": "Software engineer",   "groups": ["all-employees", "engineering"], "clearance": "internal"},
+  {"id": "sam",   "name": "Sam Lee",      "role": "Security engineer",   "groups": ["all-employees", "engineering", "security"], "clearance": "confidential"},
+  {"id": "priya", "name": "Priya Nair",   "role": "HR business partner", "groups": ["all-employees", "hr"], "clearance": "restricted"},
+  {"id": "raj",   "name": "Raj Mehta",    "role": "Finance analyst",     "groups": ["all-employees", "finance"], "clearance": "confidential"},
+  {"id": "maya",  "name": "Maya Cohen",   "role": "Account executive",   "groups": ["all-employees", "sales"], "clearance": "confidential"},
+  {"id": "kim",   "name": "Kim Park",     "role": "VP Operations",       "groups": ["all-employees", "leadership", "finance", "hr", "sales", "legal"], "clearance": "restricted"},
+  {"id": "jo",    "name": "Jo Turner",    "role": "Contractor",          "groups": ["contractors"], "clearance": "internal"}
+]

@@ -15,3 +15,6 @@ __pycache__/
 
 # Generated per run (each use case keeps a committed sample)
 gateway_finops/cost_report_*.csv
+
+# Local model and embedding caches
+rag_retrieval/.cache/

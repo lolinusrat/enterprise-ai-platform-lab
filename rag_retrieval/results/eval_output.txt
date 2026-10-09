@@ -1,0 +1,53 @@
+[1/9] vector/pre
+[2/9] bm25/pre
+[3/9] hybrid/pre
+[4/9] vector_rerank/pre
+[5/9] hybrid_rerank/pre
+[6/9] vector/none
+[7/9] vector/post
+[8/9] hybrid_rerank/none
+[9/9] hybrid_rerank/post
+
+finished in 21.9s, wrote results/eval_report.json
+
+46 queries, 78 docs / 148 chunks, k=10, embedding=BAAI/bge-small-en-v1.5, reranker=Xenova/ms-marco-MiniLM-L-6-v2
+
+Retrieval quality (permissions pre-filtered in every run)
+config                        hit@1  recall@5  recall@10  mrr@10  ndcg@10  p50 ms
+----------------------------  -----  --------  ---------  ------  -------  ------
+Vector only · pre-filter      0.861  0.954     0.954      0.903   0.908    4.5   
+BM25 only · pre-filter        0.767  0.861     0.907      0.814   0.828    0.1   
+Hybrid (RRF) · pre-filter     0.861  0.907     0.965      0.902   0.898    4.5   
+Vector + rerank · pre-filter  0.884  0.954     0.988      0.912   0.929    108.2 
+Hybrid + rerank · pre-filter  0.884  0.954     0.977      0.911   0.923    99.0  
+
+nDCG@10 by query type
+config                        lexical (n=13)  mixed (n=6)  permission (n=9)  semantic (n=15)
+----------------------------  --------------  -----------  ----------------  ---------------
+Vector only · pre-filter      0.866           1.000        0.996             0.856          
+BM25 only · pre-filter        1.000           1.000        0.774             0.642          
+Hybrid (RRF) · pre-filter     0.972           1.000        0.959             0.757          
+Vector + rerank · pre-filter  1.000           1.000        0.873             0.874          
+Hybrid + rerank · pre-filter  1.000           1.000        0.873             0.855          
+
+Permission enforcement
+config                         leaked results  queries w/ leak  sensitive docs shown  avg results  queries < k  recall@10  ndcg@10
+-----------------------------  --------------  ---------------  --------------------  -----------  -----------  ---------  -------
+Vector only · no filter        23.3%           37               6                     10.0         0            0.954      0.872  
+Vector only · post-filter      0.0%            0                0                     7.67         37           0.954      0.908  
+Vector only · pre-filter       0.0%            0                0                     9.87         3            0.954      0.908  
+Hybrid + rerank · no filter    23.3%           35               6                     10.0         0            0.942      0.898  
+Hybrid + rerank · post-filter  0.0%            0                0                     7.67         35           0.942      0.909  
+Hybrid + rerank · pre-filter   0.0%            0                0                     9.87         3            0.977      0.923  
+
+Queries where the first relevant result moved (vector only -> hybrid + rerank)
+id   user  query                                                 tags        vector  hybrid+rerank
+---  ----  ----------------------------------------------------  ----------  ------  -------------
+q03  ana   INC-2291 root cause                                   lexical     -       1            
+q06  ana   POL-IT-004                                            lexical     2       1            
+q07  ana   gh-ost                                                lexical     2       1            
+q22  ana   the site breaks at 3am, who gets woken up             semantic    4       10           
+q24  maya  how much can I lower the price for a large customer   semantic    1       4            
+q27  ana   where should my service keep its passwords and token  semantic    3       1            
+q35  ana   salary range for an L4 engineer                       permission  1       4            
+q41  jo    how do I request vacation                             permission  1       3            

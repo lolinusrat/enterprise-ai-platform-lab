@@ -1,0 +1,210 @@
+[
+ {
+  "reranker": "Xenova/ms-marco-MiniLM-L-6-v2",
+  "mode": "vector_rerank",
+  "summary": {
+   "hit@1": 0.8837,
+   "recall@5": 0.9535,
+   "recall@10": 0.9884,
+   "mrr@10": 0.9122,
+   "ndcg@10": 0.9293,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 101.5,
+   "p95_ms": 138.0
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.8728,
+   "semantic": 0.8735
+  }
+ },
+ {
+  "reranker": "Xenova/ms-marco-MiniLM-L-6-v2",
+  "mode": "hybrid_rerank",
+  "summary": {
+   "hit@1": 0.8837,
+   "recall@5": 0.9535,
+   "recall@10": 0.9767,
+   "mrr@10": 0.9112,
+   "ndcg@10": 0.9229,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 95.9,
+   "p95_ms": 119.0
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.8728,
+   "semantic": 0.8553
+  }
+ },
+ {
+  "reranker": "Xenova/ms-marco-MiniLM-L-12-v2",
+  "mode": "vector_rerank",
+  "summary": {
+   "hit@1": 0.8837,
+   "recall@5": 0.9535,
+   "recall@10": 0.9884,
+   "mrr@10": 0.9116,
+   "ndcg@10": 0.9269,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 179.6,
+   "p95_ms": 220.2
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.8602,
+   "semantic": 0.8744
+  }
+ },
+ {
+  "reranker": "Xenova/ms-marco-MiniLM-L-12-v2",
+  "mode": "hybrid_rerank",
+  "summary": {
+   "hit@1": 0.8837,
+   "recall@5": 0.9535,
+   "recall@10": 0.9767,
+   "mrr@10": 0.9105,
+   "ndcg@10": 0.9202,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 179.8,
+   "p95_ms": 201.5
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.8602,
+   "semantic": 0.8552
+  }
+ },
+ {
+  "reranker": "jinaai/jina-reranker-v1-turbo-en",
+  "mode": "vector_rerank",
+  "summary": {
+   "hit@1": 0.8372,
+   "recall@5": 0.9767,
+   "recall@10": 0.9884,
+   "mrr@10": 0.8872,
+   "ndcg@10": 0.9087,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 114.6,
+   "p95_ms": 150.5
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.8973,
+   "semantic": 0.8
+  }
+ },
+ {
+  "reranker": "jinaai/jina-reranker-v1-turbo-en",
+  "mode": "hybrid_rerank",
+  "summary": {
+   "hit@1": 0.814,
+   "recall@5": 0.9651,
+   "recall@10": 0.9767,
+   "mrr@10": 0.8729,
+   "ndcg@10": 0.894,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 117.2,
+   "p95_ms": 134.2
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.8973,
+   "semantic": 0.7578
+  }
+ },
+ {
+  "reranker": "BAAI/bge-reranker-base",
+  "mode": "vector_rerank",
+  "summary": {
+   "hit@1": 0.907,
+   "recall@5": 0.9535,
+   "recall@10": 0.9767,
+   "mrr@10": 0.9409,
+   "ndcg@10": 0.9432,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 514.7,
+   "p95_ms": 577.6
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.9046,
+   "semantic": 0.8944
+  }
+ },
+ {
+  "reranker": "BAAI/bge-reranker-base",
+  "mode": "hybrid_rerank",
+  "summary": {
+   "hit@1": 0.907,
+   "recall@5": 0.9419,
+   "recall@10": 0.9651,
+   "mrr@10": 0.9409,
+   "ndcg@10": 0.9311,
+   "queries": 46,
+   "judged_queries": 43,
+   "leak_rate": 0.0,
+   "queries_with_leak": 0,
+   "sensitive_exposures": 0,
+   "avg_returned": 9.87,
+   "short_result_queries": 3,
+   "p50_ms": 502.6,
+   "p95_ms": 549.2
+  },
+  "by_tag": {
+   "lexical": 1.0,
+   "mixed": 1.0,
+   "permission": 0.9046,
+   "semantic": 0.8597
+  }
+ }
+]

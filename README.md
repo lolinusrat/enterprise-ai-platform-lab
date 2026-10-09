@@ -9,6 +9,7 @@ Small, runnable reference implementations of the building blocks of an enterpris
 | [`gateway_finops`](gateway_finops/) | One LLM gateway in front of two model endpoints: routing, weighted load balancing, fallback, quotas (allowed models, rate limits, budgets) and cost tracking per application | LiteLLM proxy, Postgres, Groq, Ollama, Docker Compose |
 | [`observability_llmops`](observability_llmops/) | A LangGraph agent traced with OpenTelemetry (GenAI conventions), token and cost accounting from spans, and a regression-eval gate that fails a run on quality, token or cost regressions | LangGraph, OpenTelemetry, Jaeger, FastAPI, Groq, Ollama |
 | [`governance_controlPlane`](governance_controlPlane/) | A central control plane for agents built by separate business units: admission checks, layered Rego policies, workload identity, model catalog, budgets and a hash-chained audit ledger, enforced by agent, model and tool gateways | OPA/Rego, FastAPI, SPIFFE-style identity, SQLite, Ollama |
+| [`rag_retrieval`](rag_retrieval/) | Permission-aware hybrid RAG retrieval: ACLs enforced inside BM25 and vector search, RRF fusion and cross-encoder reranking, evaluated against vector-only search and against post-filtering and no filtering | fastembed (ONNX bge-small, MiniLM cross-encoder), FastAPI, Ollama |
 
 ## Where the use cases sit
 
@@ -20,6 +21,9 @@ flowchart LR
     Gov -. "policies, budgets" .-> GW
     Apps -. "traces" .-> Obs["Observability and LLMOps<br/>traces · cost · regression evals<br/><i>observability_llmops</i>"]
     GW -. "spend" .-> Obs
+    Apps --> RAG["Permission-aware retrieval<br/>hybrid search · rerank · ACL filter<br/><i>rag_retrieval</i>"]
+    RAG -- "grounded context" --> GW
+    Gov -. "groups, classification" .-> RAG
 ```
 
 ## Conventions

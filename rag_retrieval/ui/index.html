@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hybrid RAG Retrieval</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5f6b7a; --line: #dfe3e8; --soft: #eef1f4;
+  --accent: #2a78d6; --accent-soft: #e5effb;
+  --s-hybrid: #2a78d6; --s-vector: #eb6834; --s-other: #a3aab3;
+  --ok: #2b8a3e; --ok-soft: #e6f4ea; --bad: #c92a2a; --bad-soft: #fdeaea; --warn: #b7791f; --warn-soft: #fff4dc;
+  --c-public: #2b8a3e; --c-internal: #3b5bdb; --c-confidential: #b7791f; --c-restricted: #c92a2a;
+  --mark: #fff1b8;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa5b1; --line: #2d333b; --soft: #222831;
+    --accent: #3987e5; --accent-soft: #1d2b40;
+    --s-hybrid: #3987e5; --s-vector: #d95926; --s-other: #5c6570;
+    --ok: #51cf66; --ok-soft: #1b3324; --bad: #ff6b6b; --bad-soft: #3a1d1d; --warn: #fcc419; --warn-soft: #3a3016;
+    --c-public: #51cf66; --c-internal: #7c96ff; --c-confidential: #fcc419; --c-restricted: #ff6b6b;
+    --mark: #4a3f12;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1a1e24; --ink: #e6e9ed; --muted: #9aa5b1; --line: #2d333b; --soft: #222831;
+  --accent: #3987e5; --accent-soft: #1d2b40;
+  --s-hybrid: #3987e5; --s-vector: #d95926; --s-other: #5c6570;
+  --ok: #51cf66; --ok-soft: #1b3324; --bad: #ff6b6b; --bad-soft: #3a1d1d; --warn: #fcc419; --warn-soft: #3a3016;
+  --c-public: #51cf66; --c-internal: #7c96ff; --c-confidential: #fcc419; --c-restricted: #ff6b6b;
+  --mark: #4a3f12;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+header { display: flex; align-items: center; gap: 24px; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+header .sub { color: var(--muted); font-size: 13px; }
+nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+nav button { border: 0; background: none; color: var(--muted); padding: 7px 12px; border-radius: 6px; font: inherit; cursor: pointer; }
+nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+main { max-width: 1320px; margin: 0 auto; padding: 20px 24px 60px; }
+section.tab { display: none; } section.tab.active { display: block; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+.card h2 { font-size: 14px; margin: 0 0 4px; font-weight: 650; }
+.card h3 { font-size: 13px; margin: 14px 0 6px; font-weight: 650; }
+.hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 960px) { .grid2 { grid-template-columns: 1fr; } .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { padding: 16px; } }
+label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+select, input[type=text], input[type=number] { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; min-width: 0; }
+input[type=text] { width: 100%; }
+button.btn { font: inherit; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+button.btn.ghost { background: var(--panel); color: var(--accent); }
+button.btn:disabled { opacity: .5; cursor: default; }
+.controls { display: grid; grid-template-columns: 220px minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.controls2 { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
+@media (max-width: 760px) { .controls { grid-template-columns: 1fr; } }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { font: inherit; border: 0; background: var(--panel); color: var(--muted); padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.persona { font-size: 12px; color: var(--muted); margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 11.5px; border: 1px solid var(--line); white-space: nowrap; }
+.chip.click { cursor: pointer; }
+.chip.click:hover { border-color: var(--accent); color: var(--accent); }
+.cls { font-weight: 650; border-color: currentColor; background: transparent; }
+.cls.public { color: var(--c-public); } .cls.internal { color: var(--c-internal); }
+.cls.confidential { color: var(--c-confidential); } .cls.restricted { color: var(--c-restricted); }
+.examples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.examples .chip { white-space: normal; max-width: 100%; }
+.examples .lbl { font-size: 12px; color: var(--muted); margin-right: 4px; }
+.colhead { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; margin-bottom: 10px; }
+.colhead .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; }
+.stats { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.stats b { color: var(--ink); font-weight: 600; }
+.notice { font-size: 12.5px; padding: 8px 10px; border-radius: 7px; margin-bottom: 10px; }
+.notice.ok { background: var(--ok-soft); color: var(--ok); }
+.notice.bad { background: var(--bad-soft); color: var(--bad); }
+.notice.warn { background: var(--warn-soft); color: var(--warn); }
+.res { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; position: relative; }
+.res.leak { border-color: var(--bad); background: var(--bad-soft); }
+.res.rel { box-shadow: inset 3px 0 0 var(--ok); }
+.res .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.res .rank { font-family: var(--mono); color: var(--muted); font-size: 12px; min-width: 22px; }
+.res .title { font-weight: 600; }
+.res .meta { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 6px 30px; }
+.res .text { margin-left: 30px; font-size: 13px; color: var(--ink); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.res .text.open { -webkit-line-clamp: unset; }
+.res mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+.prov { margin: 6px 0 0 30px; display: flex; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.prov span b { color: var(--ink); font-weight: 600; }
+.tag-rel { color: var(--ok); font-weight: 650; font-size: 12px; }
+.tag-leak { color: var(--bad); font-weight: 650; font-size: 12px; }
+.answer { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; white-space: pre-wrap; }
+.empty { color: var(--muted); font-size: 13px; padding: 18px 4px; text-align: center; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.best td { font-weight: 650; }
+.scroll { overflow-x: auto; }
+.kpi { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--panel); }
+.kpi .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 12px; color: var(--muted); }
+.kpi .d { font-size: 12px; margin-top: 2px; }
+.up { color: var(--ok); } .down { color: var(--bad); }
+.bars { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.bar-row { display: grid; grid-template-columns: 210px minmax(0, 1fr) 54px; gap: 10px; align-items: center; font-size: 13px; cursor: default; }
+.bar-row .track { height: 18px; position: relative; }
+.bar-row .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; }
+.bar-row .val { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.bar-row:hover .fill { filter: brightness(1.08); }
+.axis { display: grid; grid-template-columns: 210px minmax(0, 1fr) 54px; gap: 10px; font-size: 11px; color: var(--muted); }
+.axis .ticks { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 2px; }
+@media (max-width: 600px) { .bar-row, .axis { grid-template-columns: 120px minmax(0, 1fr) 48px; } }
+.rk { font-family: var(--mono); font-size: 12px; text-align: center; border-radius: 4px; padding: 1px 4px; }
+.rk.r1 { background: var(--ok-soft); color: var(--ok); font-weight: 700; }
+.rk.rlow { background: var(--warn-soft); color: var(--warn); }
+.rk.miss { background: var(--bad-soft); color: var(--bad); font-weight: 700; }
+tr.q { cursor: pointer; } tr.q:hover td { background: var(--soft); }
+.matrix td.c { text-align: center; font-weight: 700; }
+.matrix td.y { color: var(--ok); } .matrix td.n { color: var(--muted); opacity: .55; }
+.tooltip { position: fixed; pointer-events: none; background: var(--ink); color: var(--panel); font-size: 12px; padding: 6px 9px; border-radius: 6px; z-index: 10; max-width: 320px; display: none; }
+svg text { font-family: inherit; fill: var(--ink); }
+svg .box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+svg .box.acl { stroke: var(--c-restricted); }
+svg .box.hl { stroke: var(--accent); }
+svg .lbl { font-size: 13px; font-weight: 650; }
+svg .small { font-size: 11px; fill: var(--muted); }
+svg .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+.progress { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.progress div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+ul.tight { margin: 6px 0; padding-left: 18px; } ul.tight li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Hybrid RAG retrieval</h1>
+    <div class="sub" id="sub">Permission-aware BM25 + dense retrieval, RRF fusion and cross-encoder reranking, compared with vector-only search</div>
+  </div>
+  <nav>
+    <button data-tab="search" class="active">Search</button>
+    <button data-tab="how">How it works</button>
+    <button data-tab="evals">Evaluation</button>
+    <button data-tab="corpus">Corpus &amp; access</button>
+  </nav>
+</header>
+<main>
+
+<section class="tab active" id="tab-search">
+  <div class="card">
+    <div class="controls">
+      <label class="f">Ask as
+        <select id="user"></select>
+      </label>
+      <label class="f">Query
+        <input type="text" id="query" placeholder="e.g. What does PAY-4031 mean?" autocomplete="off">
+      </label>
+      <button class="btn" id="go">Search</button>
+    </div>
+    <div class="persona" id="persona"></div>
+    <div class="controls2">
+      <label class="f">Permission enforcement
+        <span class="seg" id="acl">
+          <button data-v="pre" class="on" title="Restrict both indexes to the reader's chunks before ranking">Pre-filter</button>
+          <button data-v="post" title="Rank everything, then drop what the reader can't see">Post-filter</button>
+          <button data-v="none" title="No enforcement: shows what would leak">None (unsafe)</button>
+        </span>
+      </label>
+      <label class="f">Results (k)
+        <input type="number" id="k" value="5" min="1" max="20" style="width:70px">
+      </label>
+    </div>
+    <div class="examples" id="examples"></div>
+  </div>
+  <div class="grid2">
+    <div class="card" id="col-a"></div>
+    <div class="card" id="col-b"></div>
+  </div>
+</section>
+
+<section class="tab" id="tab-how">
+  <div class="card">
+    <h2>The pipeline</h2>
+    <p class="hint">Permissions are applied first, inside both indexes, so nothing the reader can't see is ranked, reranked or sent to the model.</p>
+    <div class="scroll">
+    <svg viewBox="0 0 1180 300" width="100%" style="min-width:860px" role="img" aria-label="Pipeline diagram">
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker></defs>
+      <rect class="box" x="10" y="115" width="140" height="70" rx="8"/>
+      <text class="lbl" x="80" y="144" text-anchor="middle">Query</text>
+      <text class="small" x="80" y="164" text-anchor="middle">+ reader identity</text>
+
+      <rect class="box acl" x="190" y="105" width="170" height="90" rx="8"/>
+      <text class="lbl" x="275" y="136" text-anchor="middle">Permission mask</text>
+      <text class="small" x="275" y="156" text-anchor="middle">group ∩ ACL ≠ ∅</text>
+      <text class="small" x="275" y="174" text-anchor="middle">clearance ≥ classification</text>
+
+      <rect class="box" x="410" y="30" width="190" height="90" rx="8"/>
+      <text class="lbl" x="505" y="62" text-anchor="middle">BM25 (lexical)</text>
+      <text class="small" x="505" y="82" text-anchor="middle">identifiers kept whole</text>
+      <text class="small" x="505" y="100" text-anchor="middle">top 50 permitted chunks</text>
+
+      <rect class="box" x="410" y="180" width="190" height="90" rx="8"/>
+      <text class="lbl" x="505" y="212" text-anchor="middle">Dense (vector)</text>
+      <text class="small" x="505" y="232" text-anchor="middle">bge-small-en-v1.5, cosine</text>
+      <text class="small" x="505" y="250" text-anchor="middle">top 50 permitted chunks</text>
+
+      <rect class="box" x="650" y="105" width="150" height="90" rx="8"/>
+      <text class="lbl" x="725" y="136" text-anchor="middle">RRF fusion</text>
+      <text class="small" x="725" y="156" text-anchor="middle">Σ 1 / (60 + rank)</text>
+      <text class="small" x="725" y="174" text-anchor="middle">no score calibration</text>
+
+      <rect class="box hl" x="850" y="105" width="160" height="90" rx="8"/>
+      <text class="lbl" x="930" y="136" text-anchor="middle">Cross-encoder</text>
+      <text class="small" x="930" y="156" text-anchor="middle">rerank top 30 pairs</text>
+      <text class="small" x="930" y="174" text-anchor="middle">MiniLM-L6 (ONNX)</text>
+
+      <rect class="box" x="1050" y="105" width="120" height="90" rx="8"/>
+      <text class="lbl" x="1110" y="136" text-anchor="middle">Top-k docs</text>
+      <text class="small" x="1110" y="156" text-anchor="middle">best chunk per doc</text>
+      <text class="small" x="1110" y="174" text-anchor="middle">→ optional LLM</text>
+
+      <path class="edge" d="M150,150 L188,150"/>
+      <path class="edge" d="M360,135 C385,135 385,75 408,75"/>
+      <path class="edge" d="M360,165 C385,165 385,225 408,225"/>
+      <path class="edge" d="M600,75 C625,75 625,135 648,135"/>
+      <path class="edge" d="M600,225 C625,225 625,165 648,165"/>
+      <path class="edge" d="M800,150 L848,150"/>
+      <path class="edge" d="M1010,150 L1048,150"/>
+    </svg>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h2>Why hybrid</h2>
+      <ul class="tight">
+        <li><b>Dense retrieval</b> matches meaning: "I can't get into the corporate network from home" finds the VPN guide without sharing a word with it.</li>
+        <li><b>It blurs identifiers.</b> <code>INC-2291</code>, <code>INC-2287</code> and <code>INC-2302</code> embed almost identically, as do <code>PAY-4031</code> and <code>BILL-4031</code>. BM25 matches the exact token.</li>
+        <li><b>RRF</b> merges the two rankings by rank, so cosine similarities and BM25 scores never need to be put on one scale.</li>
+        <li><b>The cross-encoder</b> reads query and chunk together and fixes the order, which matters most for the top 1–3 results an LLM actually uses.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Three ways to enforce permissions</h2>
+      <ul class="tight">
+        <li><b>Pre-filter</b> (used here): the permission mask is applied inside BM25 and the vector search, so the top k is the best k the reader may see. No leaks, full result lists.</li>
+        <li><b>Post-filter</b>: rank over everything, then drop forbidden results. No leaks, but users get fewer than k results, and the gaps are larger for less-privileged users.</li>
+        <li><b>None</b>: what an unprotected index does. Restricted salary bands, layoff plans and unannounced results show up for anyone who asks.</li>
+        <li>Pre-filter also reports how many forbidden documents <i>would</i> have ranked, as a count only. Showing their titles would itself be a leak.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Access rule</h2>
+    <p class="hint">Each document carries a classification (<span class="chip cls public">public</span> <span class="chip cls internal">internal</span> <span class="chip cls confidential">confidential</span> <span class="chip cls restricted">restricted</span>) and a list of groups. A reader can see it when they belong to one of the groups <i>and</i> their clearance is at least the classification. The ACL is copied onto every chunk at index time, so filtering needs no join at query time.</p>
+  </div>
+</section>
+
+<section class="tab" id="tab-evals">
+  <div class="card">
+    <div class="colhead">
+      <div>
+        <h2>Retrieval evaluation</h2>
+        <p class="hint" id="eval-meta" style="margin:0">Loading…</p>
+      </div>
+      <button class="btn ghost" id="rerun">Re-run evaluation</button>
+    </div>
+    <div class="progress" id="prog" style="display:none"><div></div></div>
+  </div>
+  <div class="grid4" id="kpis" style="margin-bottom:16px"></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="colhead">
+        <h2>Quality by configuration</h2>
+        <select id="metric"></select>
+      </div>
+      <p class="hint">All runs pre-filtered by permission; document-level metrics at k=10.</p>
+      <div id="chart"></div>
+    </div>
+    <div class="card">
+      <h2>nDCG@10 by query type</h2>
+      <p class="hint">Lexical: identifiers and exact terms. Semantic: paraphrases with little word overlap. Permission: the best match is forbidden for some readers.</p>
+      <div class="scroll" id="bytag"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>All metrics</h2>
+    <div class="scroll" id="quality"></div>
+  </div>
+  <div class="card">
+    <h2>Permission enforcement</h2>
+    <p class="hint">The same 46 queries, each asked as its persona. "Sensitive docs shown" counts named high-risk documents (salary bands, layoff plan, unannounced results, pentest findings) that reached a reader without access.</p>
+    <div class="scroll" id="perm"></div>
+  </div>
+  <div class="card">
+    <h2>Per query: rank of the first relevant document</h2>
+    <p class="hint">Click a row to open it in Search with the same persona. <span class="rk r1">1</span> top hit · <span class="rk rlow">4+</span> found low · <span class="rk miss">–</span> not in top 10.</p>
+    <div style="margin-bottom:8px"><select id="tagfilter"></select></div>
+    <div class="scroll" id="perq"></div>
+  </div>
+  <div class="card">
+    <h2>Reranker comparison</h2>
+    <p class="hint">The same suite with four fastembed cross-encoders (<code>run_evals.py --rerankers …</code>). Default: MiniLM-L6, the fastest.</p>
+    <div class="scroll" id="rerankers"></div>
+  </div>
+</section>
+
+<section class="tab" id="tab-corpus">
+  <div class="card">
+    <div class="colhead">
+      <div>
+        <h2>Corpus and access matrix</h2>
+        <p class="hint" style="margin:0">Which persona can read which document. Hover a cell for the reason.</p>
+      </div>
+      <select id="dept"></select>
+    </div>
+    <div class="scroll" style="margin-top:10px" id="matrix"></div>
+  </div>
+</section>
+
+</main>
+<div class="tooltip" id="tip"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const api = async (path, body) => {
+  const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+};
+let CFG, REPORT, CORPUS;
+const cols = {a: {mode: "vector"}, b: {mode: "hybrid_rerank"}};
+let acl = "pre";
+const tip = $("#tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block"; tip.style.left = Math.min(e.clientX + 12, innerWidth - 330) + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+function hideTip() { tip.style.display = "none"; }
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "evals" && !REPORT) loadReport();
+  if (b.dataset.tab === "corpus" && !CORPUS) loadCorpus();
+});
+
+const clsChip = c => `<span class="chip cls ${c}">${c}</span>`;
+const modeLabel = m => CFG.modes.find(x => x.id === m)?.label || m;
+const modeColor = m => m === "hybrid_rerank" ? "var(--s-hybrid)" : m === "vector" ? "var(--s-vector)" : "var(--s-other)";
+
+async function init() {
+  CFG = await api("/api/config");
+  $("#sub").textContent = `${CFG.stats.docs} documents · ${CFG.stats.chunks} chunks · ${CFG.users.length} personas · embeddings ${CFG.models.embedding} · reranker ${CFG.models.reranker}`;
+  $("#user").innerHTML = CFG.users.map(u => `<option value="${u.id}">${esc(u.name)} — ${esc(u.role)}</option>`).join("");
+  $("#user").onchange = () => { renderPersona(); run(); };
+  renderPersona();
+  const picks = ["q01", "q03", "q14", "q35", "q36", "q37", "q41", "q24"];
+  $("#examples").innerHTML = `<span class="lbl">Try:</span>` + picks.map(id => {
+    const q = CFG.queries.find(x => x.id === id);
+    const u = CFG.users.find(x => x.id === q.user);
+    return `<span class="chip click" data-q="${id}" title="${esc(q.tags.join(", "))}">${esc(q.query)} <i>· ${esc(u.name.split(" ")[0])}</i></span>`;
+  }).join("");
+  $("#examples").querySelectorAll("[data-q]").forEach(el => el.onclick = () => loadQuery(el.dataset.q));
+  $("#acl").querySelectorAll("button").forEach(b => b.onclick = () => {
+    acl = b.dataset.v; $("#acl").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); run();
+  });
+  $("#go").onclick = run;
+  $("#query").onkeydown = e => { if (e.key === "Enter") run(); };
+  $("#k").onchange = run;
+  renderCol("a"); renderCol("b");
+  loadQuery("q03");
+}
+
+function renderPersona() {
+  const u = CFG.users.find(x => x.id === $("#user").value);
+  $("#persona").innerHTML = `Groups: ${u.groups.map(g => `<span class="chip">${esc(g)}</span>`).join(" ")} · clearance ${clsChip(u.clearance)}`;
+}
+
+function loadQuery(id) {
+  const q = CFG.queries.find(x => x.id === id);
+  $("#user").value = q.user; renderPersona();
+  $("#query").value = q.query;
+  document.querySelector('nav button[data-tab="search"]').click();
+  run();
+}
+
+function judged() {
+  const q = $("#query").value.trim(), u = $("#user").value;
+  return CFG.queries.find(x => x.query === q && x.user === u);
+}
+
+function renderCol(key, data, err) {
+  const el = $("#col-" + key), c = cols[key];
+  const opts = CFG.modes.map(m => `<option value="${m.id}" ${m.id === c.mode ? "selected" : ""}>${esc(m.label)}</option>`).join("");
+  let body = "";
+  if (err) body = `<div class="notice bad">${esc(err)}</div>`;
+  else if (!data) body = `<div class="empty">Run a search</div>`;
+  else {
+    const s = data.acl_stats, t = data.timings, j = judged();
+    const timing = ["vector_ms", "bm25_ms", "rerank_ms"].filter(x => x in t).map(x => `${x.replace("_ms", "")} <b>${t[x].toFixed(1)}</b>`).join(" · ");
+    body += `<div class="stats"><span><b>${data.results.length}</b>/${data.k} results</span><span>searched <b>${s.permitted_chunks}</b>/${s.total_chunks} chunks</span><span>${timing}</span><span>total <b>${t.total_ms.toFixed(1)} ms</b></span></div>`;
+    if (data.acl === "none" && s.leaked) body += `<div class="notice bad">⚠ ${s.leaked} result${s.leaked > 1 ? "s" : ""} this reader is not allowed to see. Each is marked below.</div>`;
+    else if (data.acl === "none") body += `<div class="notice warn">No enforcement. Nothing forbidden happened to rank for this query.</div>`;
+    if (data.acl === "post" && s.post_filter_dropped) body += `<div class="notice warn">Post-filter dropped ${s.post_filter_dropped} forbidden result${s.post_filter_dropped > 1 ? "s" : ""} after ranking, so only ${data.results.length} of ${data.k} come back.</div>`;
+    if (data.acl === "pre" && s.would_surface) body += `<div class="notice ok">🔒 ${s.would_surface} document${s.would_surface > 1 ? "s" : ""} this reader can't see would have ranked in the top ${data.k} without the filter. Titles withheld.</div>`;
+    if (!data.results.length) body += `<div class="empty">No permitted documents match.</div>`;
+    const terms = data.query.toLowerCase().match(/[a-z0-9]+(?:[-_.][a-z0-9]+)*/g) || [];
+    const hl = text => {
+      let out = esc(text);
+      terms.filter(w => w.length > 2 && !STOP.has(w)).forEach(w => {
+        out = out.replace(new RegExp(`\\b(${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "<mark>$1</mark>");
+      });
+      return out;
+    };
+    for (const r of data.results) {
+      const p = r.provenance;
+      const grade = j?.relevant?.[r.doc_id];
+      const prov = [
+        p.vector_rank != null ? `<span>vec <b>#${p.vector_rank}</b> ${p.vector_score.toFixed(3)}</span>` : "",
+        p.bm25_rank != null ? `<span>bm25 <b>#${p.bm25_rank}</b> ${p.bm25_score.toFixed(2)}</span>` : (data.mode.includes("hybrid") || data.mode === "bm25" ? `<span>bm25 <b>–</b></span>` : ""),
+        data.mode.startsWith("hybrid") ? `<span>rrf <b>#${p.fused_rank}</b></span>` : "",
+        p.rerank_score != null ? `<span>rerank <b>${p.rerank_score.toFixed(2)}</b></span>` : "",
+      ].join("");
+      body += `<div class="res ${r.allowed ? "" : "leak"} ${grade ? "rel" : ""}">
+        <div class="top"><span class="rank">#${r.rank}</span><span class="title">${esc(r.title)}</span>
+          ${grade ? `<span class="tag-rel">✓ relevant${grade === 1 ? " (partial)" : ""}</span>` : ""}
+          ${!r.allowed ? `<span class="tag-leak">LEAK: ${esc(r.deny_reason)}</span>` : ""}</div>
+        <div class="meta">${clsChip(r.classification)} ${r.groups.map(g => `<span class="chip">${esc(g)}</span>`).join(" ")} <span class="chip">${esc(r.chunk_id)}</span></div>
+        <div class="text" onclick="this.classList.toggle('open')">${hl(r.text)}</div>
+        <div class="prov">${prov}</div>
+      </div>`;
+    }
+    if (j) {
+      const missing = Object.keys(j.relevant).filter(d => !data.results.some(r => r.doc_id === d));
+      if (missing.length) body += `<div class="notice warn">Judged relevant but not in the top ${data.k}: ${missing.map(esc).join(", ")}</div>`;
+      if (!Object.keys(j.relevant).length) body += `<div class="notice ok">This reader has no document that answers this query. The correct behaviour is to return nothing sensitive.</div>`;
+    }
+    body += `<button class="btn ghost" data-ans="${key}" style="margin-top:4px">Generate answer with ${esc(CFG.models.answer)}</button><div id="ans-${key}"></div>`;
+  }
+  el.innerHTML = `<div class="colhead"><h2><span class="swatch" style="background:${modeColor(c.mode)}"></span>${esc(modeLabel(c.mode))}</h2><select data-col="${key}">${opts}</select></div>${body}`;
+  el.querySelector("select").onchange = e => { cols[key].mode = e.target.value; runCol(key); };
+  const ab = el.querySelector("[data-ans]");
+  if (ab) ab.onclick = () => genAnswer(key, ab);
+}
+const STOP = new Set("the and for are how what does can when where who with from that this your our you get got have mean".split(" "));
+
+async function runCol(key) {
+  const query = $("#query").value.trim();
+  if (!query) return;
+  renderCol(key, null);
+  $("#col-" + key).querySelector(".empty").textContent = "Searching…";
+  try {
+    const data = await api("/api/search", {query, user: $("#user").value, mode: cols[key].mode, acl, k: +$("#k").value || 5});
+    renderCol(key, data);
+  } catch (e) { renderCol(key, null, e.message); }
+}
+function run() { runCol("a"); runCol("b"); }
+
+async function genAnswer(key, btn) {
+  btn.disabled = true; btn.textContent = "Generating…";
+  const box = $("#ans-" + key);
+  try {
+    const a = await api("/api/answer", {query: $("#query").value.trim(), user: $("#user").value, mode: cols[key].mode, acl, k: +$("#k").value || 5});
+    box.innerHTML = `<div class="answer">${esc(a.answer)}\n\n<span style="color:var(--muted);font-size:12px">${a.sources.map(s => `[${s.n}] ${esc(s.title)}`).join(" · ")} · ${a.eval_ms} ms${a.leaked_sources ? ` · <b style="color:var(--bad)">${a.leaked_sources} forbidden source(s) were in the prompt</b>` : ""}</span></div>`;
+    btn.remove();
+  } catch (e) { box.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`; btn.disabled = false; btn.textContent = "Retry answer"; }
+}
+
+/* ---------------- evaluation ---------------- */
+const METRICS = [["ndcg@10", "nDCG@10"], ["mrr@10", "MRR@10"], ["hit@1", "Hit@1"], ["recall@5", "Recall@5"], ["recall@10", "Recall@10"]];
+const f3 = x => x == null ? "–" : x.toFixed(3);
+
+async function loadReport() {
+  try { REPORT = await api("/api/report"); renderReport(); }
+  catch (e) { $("#eval-meta").textContent = e.message; }
+}
+
+function renderReport() {
+  const R = REPORT, m = R.meta, runs = R.runs;
+  $("#eval-meta").innerHTML = `${m.queries} queries · ${m.docs} docs / ${m.chunks} chunks · k=${m.k} · reranker ${esc(m.models.reranker)} · run ${esc(m.started_at)} in ${m.duration_s}s`;
+  const vec = runs["vector/pre"].summary, best = runs["hybrid_rerank/pre"].summary;
+  const none = runs["hybrid_rerank/none"].summary, post = runs["hybrid_rerank/post"].summary;
+  const delta = (a, b) => { const d = a - b; return `<span class="${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : ""}${d.toFixed(3)} vs vector only</span>`; };
+  $("#kpis").innerHTML = `
+    <div class="kpi"><div class="l">nDCG@10, hybrid + rerank</div><div class="v">${f3(best["ndcg@10"])}</div><div class="d">${delta(best["ndcg@10"], vec["ndcg@10"])}</div></div>
+    <div class="kpi"><div class="l">nDCG@10 on lexical queries</div><div class="v">${f3(runs["hybrid_rerank/pre"].by_tag.lexical["ndcg@10"])}</div><div class="d">${delta(runs["hybrid_rerank/pre"].by_tag.lexical["ndcg@10"], runs["vector/pre"].by_tag.lexical["ndcg@10"])}</div></div>
+    <div class="kpi"><div class="l">Results leaked with no filter</div><div class="v" style="color:var(--bad)">${(none.leak_rate * 100).toFixed(1)}%</div><div class="d">${none.queries_with_leak}/${none.queries} queries · ${none.sensitive_exposures} sensitive docs shown</div></div>
+    <div class="kpi"><div class="l">Avg results with post-filter</div><div class="v">${post.avg_returned}<span style="font-size:14px;color:var(--muted)">/${m.k}</span></div><div class="d">${post.short_result_queries} queries came back short · pre-filter: ${best.avg_returned}</div></div>`;
+  $("#metric").innerHTML = METRICS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
+  $("#metric").onchange = drawChart;
+  drawChart();
+
+  const tags = Object.keys(runs["vector/pre"].by_tag);
+  const qruns = m.quality_runs;
+  const bestOf = (vals) => Math.max(...vals);
+  let h = `<table><tr><th>config</th>${tags.map(t => `<th class="num">${t} <span style="font-weight:400">(n=${runs["vector/pre"].by_tag[t].n})</span></th>`).join("")}</tr>`;
+  for (const key of qruns) {
+    h += `<tr><td>${esc(runs[key].label.split(" · ")[0])}</td>${tags.map(t => {
+      const v = runs[key].by_tag[t]["ndcg@10"], b = bestOf(qruns.map(k => runs[k].by_tag[t]["ndcg@10"]));
+      return `<td class="num" style="${v === b ? "font-weight:700" : ""}">${f3(v)}</td>`;
+    }).join("")}</tr>`;
+  }
+  $("#bytag").innerHTML = h + "</table>";
+
+  h = `<table><tr><th>config</th>${METRICS.map(([, l]) => `<th class="num">${l}</th>`).join("")}<th class="num">p50 ms</th><th class="num">p95 ms</th></tr>`;
+  for (const key of qruns) {
+    const s = runs[key].summary;
+    h += `<tr class="${key === "hybrid_rerank/pre" ? "best" : ""}"><td>${esc(runs[key].label)}</td>${METRICS.map(([k]) => `<td class="num">${f3(s[k])}</td>`).join("")}<td class="num">${s.p50_ms}</td><td class="num">${s.p95_ms}</td></tr>`;
+  }
+  $("#quality").innerHTML = h + "</table>";
+
+  h = `<table><tr><th>config</th><th class="num">leaked results</th><th class="num">queries with a leak</th><th class="num">sensitive docs shown</th><th class="num">avg results</th><th class="num">queries &lt; k</th><th class="num">Recall@10</th><th class="num">nDCG@10</th></tr>`;
+  for (const key of m.acl_runs) {
+    const s = runs[key].summary, bad = s.leak_rate > 0;
+    h += `<tr><td>${esc(runs[key].label)}</td><td class="num" style="${bad ? "color:var(--bad);font-weight:700" : ""}">${(s.leak_rate * 100).toFixed(1)}%</td><td class="num">${s.queries_with_leak}</td><td class="num" style="${s.sensitive_exposures ? "color:var(--bad);font-weight:700" : ""}">${s.sensitive_exposures}</td><td class="num">${s.avg_returned}</td><td class="num">${s.short_result_queries}</td><td class="num">${f3(s["recall@10"])}</td><td class="num">${f3(s["ndcg@10"])}</td></tr>`;
+  }
+  $("#perm").innerHTML = h + "</table>";
+
+  const allTags = [...new Set(runs["vector/pre"].per_query.flatMap(r => r.tags))];
+  $("#tagfilter").innerHTML = `<option value="">All query types</option><option value="__diff">Only queries where configs differ</option>` + allTags.map(t => `<option>${t}</option>`).join("");
+  $("#tagfilter").onchange = drawPerQuery;
+  drawPerQuery();
+
+  if (R.rerankers?.length) {
+    h = `<table><tr><th>reranker</th><th>first stage</th><th class="num">Hit@1</th><th class="num">MRR@10</th><th class="num">nDCG@10</th><th class="num">semantic nDCG</th><th class="num">p50 ms</th></tr>`;
+    for (const r of R.rerankers) h += `<tr><td>${esc(r.reranker)}</td><td>${r.mode === "vector_rerank" ? "vector" : "hybrid"}</td><td class="num">${f3(r.summary["hit@1"])}</td><td class="num">${f3(r.summary["mrr@10"])}</td><td class="num">${f3(r.summary["ndcg@10"])}</td><td class="num">${f3(r.by_tag.semantic)}</td><td class="num">${r.summary.p50_ms}</td></tr>`;
+    $("#rerankers").innerHTML = h + "</table>";
+  } else $("#rerankers").innerHTML = `<div class="empty">No comparison saved yet.</div>`;
+}
+
+function drawChart() {
+  const metric = $("#metric").value, runs = REPORT.runs;
+  const rows = REPORT.meta.quality_runs.map(k => ({key: k, mode: runs[k].mode, label: runs[k].label.split(" · ")[0], v: runs[k].summary[metric], s: runs[k].summary}));
+  const lo = Math.max(0, Math.floor((Math.min(...rows.map(r => r.v)) - 0.1) * 10) / 10);
+  const pct = v => ((v - lo) / (1 - lo)) * 100;
+  let h = `<div class="bars">`;
+  for (const r of rows) {
+    h += `<div class="bar-row" data-k="${r.key}"><span>${esc(r.label)}</span><div class="track"><div class="fill" style="width:${pct(r.v)}%;background:${modeColor(r.mode)}"></div></div><span class="val">${f3(r.v)}</span></div>`;
+  }
+  const ticks = [0, .25, .5, .75, 1].map(t => (lo + t * (1 - lo)).toFixed(2));
+  h += `</div><div class="axis" style="margin-top:4px"><span></span><div class="ticks">${ticks.map(t => `<span>${t}</span>`).join("")}</div><span></span></div>
+    <p class="hint" style="margin-top:8px">Axis starts at ${lo.toFixed(1)} to show differences; values are labelled. <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--s-vector)"></span> vector-only baseline · <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--s-hybrid)"></span> hybrid + rerank · <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--s-other)"></span> other</p>`;
+  $("#chart").innerHTML = h;
+  $("#chart").querySelectorAll(".bar-row").forEach(el => {
+    const r = rows.find(x => x.key === el.dataset.k);
+    el.onmousemove = e => showTip(e, `<b>${esc(runs[r.key].label)}</b><br>${METRICS.map(([k, l]) => `${l}: ${f3(r.s[k])}`).join("<br>")}<br>p50 latency: ${r.s.p50_ms} ms`);
+    el.onmouseleave = hideTip;
+  });
+}
+
+function drawPerQuery() {
+  const runs = REPORT.runs, keys = REPORT.meta.quality_runs, tag = $("#tagfilter").value;
+  const base = runs["vector/pre"].per_query;
+  let h = `<table><tr><th>id</th><th>persona</th><th>query</th><th>type</th>${keys.map(k => `<th class="num">${esc(runs[k].label.split(" · ")[0])}</th>`).join("")}<th class="num">leaks w/o filter</th></tr>`;
+  base.forEach((row, i) => {
+    const ranks = keys.map(k => runs[k].per_query[i].first_relevant_rank);
+    const isJudged = "ndcg@10" in row;
+    if (tag === "__diff" && (!isJudged || new Set(ranks).size === 1)) return;
+    if (tag && tag !== "__diff" && !row.tags.includes(tag)) return;
+    const leaks = runs["hybrid_rerank/none"].per_query[i];
+    const cell = r => !isJudged ? `<td class="num" style="color:var(--muted)">n/a</td>` : r == null ? `<td class="num"><span class="rk miss">–</span></td>` : `<td class="num"><span class="rk ${r === 1 ? "r1" : r >= 4 ? "rlow" : ""}">${r}</span></td>`;
+    h += `<tr class="q" data-q="${row.id}"><td>${row.id}</td><td>${esc(row.user)}</td><td>${esc(row.query)}</td><td>${row.tags.map(t => `<span class="chip">${t}</span>`).join(" ")}</td>${ranks.map(cell).join("")}<td class="num" style="${leaks.leaked ? "color:var(--bad);font-weight:650" : "color:var(--muted)"}">${leaks.leaked}${leaks.sensitive_exposed.length ? " ⚠" : ""}</td></tr>`;
+  });
+  $("#perq").innerHTML = h + "</table>";
+  $("#perq").querySelectorAll("tr.q").forEach(tr => tr.onclick = () => loadQuery(tr.dataset.q));
+}
+
+$("#rerun").onclick = async () => {
+  const btn = $("#rerun"); btn.disabled = true;
+  const bar = $("#prog"); bar.style.display = "block";
+  try {
+    let job = await api("/api/evals", {});
+    while (job.status === "running") {
+      bar.firstElementChild.style.width = (job.progress * 100) + "%";
+      btn.textContent = `Running ${job.step}…`;
+      await new Promise(r => setTimeout(r, 700));
+      job = await api("/api/evals/" + job.id);
+    }
+    if (job.status === "error") throw new Error(job.error);
+    await loadReport();
+  } catch (e) { $("#eval-meta").textContent = "Eval failed: " + e.message; }
+  btn.disabled = false; btn.textContent = "Re-run evaluation"; bar.style.display = "none";
+};
+
+/* ---------------- corpus ---------------- */
+async function loadCorpus() {
+  CORPUS = await api("/api/corpus");
+  const depts = [...new Set(CORPUS.docs.map(d => d.department))].sort();
+  $("#dept").innerHTML = `<option value="">All departments</option>` + depts.map(d => `<option>${d}</option>`).join("");
+  $("#dept").onchange = drawMatrix;
+  drawMatrix();
+}
+function drawMatrix() {
+  const dept = $("#dept").value, users = CFG.users;
+  const docs = CORPUS.docs.filter(d => !dept || d.department === dept)
+    .sort((a, b) => CORPUS.levels.indexOf(b.classification) - CORPUS.levels.indexOf(a.classification) || a.id.localeCompare(b.id));
+  let h = `<table class="matrix"><tr><th>document</th><th>class</th><th>groups</th><th class="num">chunks</th>${users.map(u => `<th style="text-align:center" title="${esc(u.role)} · ${esc(u.groups.join(", "))} · ${u.clearance}">${esc(u.name.split(" ")[0])}<br><span style="font-weight:400">${esc(u.role.split(" ")[0])}</span></th>`).join("")}</tr>`;
+  for (const d of docs) {
+    h += `<tr><td><b>${esc(d.title)}</b><br><span style="color:var(--muted);font-size:12px">${esc(d.id)} · ${esc(d.department)} · ${esc(d.updated)}</span></td><td>${clsChip(d.classification)}</td><td>${d.groups.map(g => `<span class="chip">${esc(g)}</span>`).join(" ")}</td><td class="num">${d.chunks}</td>${users.map(u => `<td class="c ${d.access[u.id] ? "y" : "n"}" data-r="${esc(d.reasons[u.id] || "allowed")}">${d.access[u.id] ? "✓" : "·"}</td>`).join("")}</tr>`;
+  }
+  const totals = users.map(u => CORPUS.docs.filter(d => d.access[u.id]).length);
+  h += `<tr><td colspan="4" style="color:var(--muted)">readable documents</td>${totals.map(t => `<td class="c">${t}</td>`).join("")}</tr>`;
+  $("#matrix").innerHTML = h + "</table>";
+  $("#matrix").querySelectorAll("td.c[data-r]").forEach(td => { td.onmousemove = e => showTip(e, esc(td.dataset.r)); td.onmouseleave = hideTip; });
+}
+
+init().catch(e => { document.querySelector("main").insertAdjacentHTML("afterbegin", `<div class="notice bad">${esc(e.message)}</div>`); });
+</script>
+</body>
+</html>

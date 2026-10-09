@@ -1,0 +1,46 @@
+{"id": "q01", "user": "ana", "tags": ["lexical"], "query": "What does PAY-4031 mean?", "relevant": {"eng-payments-error-codes": 2}}
+{"id": "q02", "user": "ana", "tags": ["lexical"], "query": "GC-809 error", "relevant": {"it-vpn-setup": 2}}
+{"id": "q03", "user": "ana", "tags": ["lexical"], "query": "INC-2291 root cause", "relevant": {"eng-postmortem-inc-2291": 2}}
+{"id": "q04", "user": "ana", "tags": ["lexical"], "query": "pgbouncer max_client_conn", "relevant": {"eng-postmortem-inc-2291": 2}}
+{"id": "q05", "user": "maya", "tags": ["lexical"], "query": "HC-ENT-01", "relevant": {"pub-pricing": 2}}
+{"id": "q06", "user": "ana", "tags": ["lexical"], "query": "POL-IT-004", "relevant": {"it-password-policy": 2}}
+{"id": "q07", "user": "ana", "tags": ["lexical"], "query": "gh-ost", "relevant": {"eng-db-migrations": 2}}
+{"id": "q08", "user": "sam", "tags": ["lexical"], "query": "HAL-PT-07", "relevant": {"sec-pentest-2026": 2}}
+{"id": "q09", "user": "ana", "tags": ["lexical"], "query": "argocd app rollback", "relevant": {"eng-deploy-runbook": 2}}
+{"id": "q10", "user": "jo", "tags": ["lexical"], "query": "Fieldglass deadline", "relevant": {"contractor-guide": 2}}
+{"id": "q11", "user": "ana", "tags": ["lexical"], "query": "HW-REFRESH", "relevant": {"it-laptop-refresh": 2}}
+{"id": "q12", "user": "ana", "tags": ["lexical"], "query": "AGPL", "relevant": {"legal-oss-policy": 2}}
+{"id": "q13", "user": "maya", "tags": ["lexical"], "query": "ESC project ticket", "relevant": {"support-escalation": 2}}
+{"id": "q14", "user": "ana", "tags": ["semantic"], "query": "I can't get into the corporate network from home", "relevant": {"it-vpn-setup": 2}}
+{"id": "q15", "user": "ana", "tags": ["semantic"], "query": "my phone got stolen and now I can't log in", "relevant": {"it-mfa-reset": 2}}
+{"id": "q16", "user": "ana", "tags": ["semantic"], "query": "how many vacation days do I get each year", "relevant": {"hr-pto": 2, "hr-pto-uk": 1}}
+{"id": "q17", "user": "ana", "tags": ["semantic"], "query": "how much time off when my baby is born", "relevant": {"hr-parental-leave": 2}}
+{"id": "q18", "user": "ana", "tags": ["semantic"], "query": "can I spend a few weeks working from Spain", "relevant": {"hr-remote-work": 2}}
+{"id": "q19", "user": "ana", "tags": ["semantic"], "query": "is my dinner covered when I'm away for work", "relevant": {"fin-expense-policy": 2}}
+{"id": "q20", "user": "ana", "tags": ["semantic"], "query": "I got a strange email asking me to enter my login", "relevant": {"sec-phishing": 2}}
+{"id": "q21", "user": "ana", "tags": ["semantic"], "query": "how quickly do we have to patch a severe security hole", "relevant": {"sec-vulnerability-sla": 2}}
+{"id": "q22", "user": "ana", "tags": ["semantic"], "query": "the site breaks at 3am, who gets woken up", "relevant": {"eng-oncall": 2, "eng-incident-management": 1}}
+{"id": "q23", "user": "ana", "tags": ["semantic"], "query": "can we ship a library that has a copyleft license", "relevant": {"legal-oss-policy": 2}}
+{"id": "q24", "user": "maya", "tags": ["semantic"], "query": "how much can I lower the price for a large customer without asking", "relevant": {"sales-discount-policy": 2, "sales-deal-desk": 1}}
+{"id": "q25", "user": "ana", "tags": ["semantic"], "query": "a user wants to see everything we store about them", "relevant": {"legal-dsar": 2, "pub-privacy-notice": 1}}
+{"id": "q26", "user": "ana", "tags": ["semantic"], "query": "when will I get a new computer", "relevant": {"it-laptop-refresh": 2}}
+{"id": "q27", "user": "ana", "tags": ["semantic"], "query": "where should my service keep its passwords and tokens", "relevant": {"sec-secrets-management": 2}}
+{"id": "q28", "user": "ana", "tags": ["semantic"], "query": "quickly turn off a half-released feature that is hurting metrics", "relevant": {"eng-feature-flags": 2}}
+{"id": "q29", "user": "ana", "tags": ["mixed"], "query": "Kafka topic naming and retention", "relevant": {"eng-kafka-conventions": 2}}
+{"id": "q30", "user": "ana", "tags": ["mixed"], "query": "getting 429 Too Many Requests from the API", "relevant": {"eng-rate-limits": 2}}
+{"id": "q31", "user": "raj", "tags": ["mixed"], "query": "purchase order threshold and how many quotes we need", "relevant": {"fin-procurement": 2}}
+{"id": "q32", "user": "maya", "tags": ["mixed"], "query": "uptime guarantee and service credits", "relevant": {"pub-sla": 2}}
+{"id": "q33", "user": "sam", "tags": ["mixed"], "query": "who to notify within 72 hours of a data breach", "relevant": {"sec-incident-response": 2}}
+{"id": "q34", "user": "jo", "tags": ["mixed"], "query": "SOC 2 report and encryption at rest", "relevant": {"pub-security-whitepaper": 2}}
+{"id": "q35", "user": "ana", "tags": ["permission"], "query": "salary range for an L4 engineer", "relevant": {"hr-comp-philosophy": 2}, "sensitive": ["hr-salary-bands-2026"]}
+{"id": "q36", "user": "priya", "tags": ["permission"], "query": "salary range for an L4 engineer", "relevant": {"hr-salary-bands-2026": 2, "hr-comp-philosophy": 1}}
+{"id": "q37", "user": "ana", "tags": ["permission", "no-answer"], "query": "are layoffs or a reorg planned next year", "relevant": {}, "sensitive": ["hr-project-juniper"]}
+{"id": "q38", "user": "priya", "tags": ["permission"], "query": "are layoffs or a reorg planned next year", "relevant": {"hr-project-juniper": 2}}
+{"id": "q39", "user": "raj", "tags": ["permission", "no-answer"], "query": "Q3 revenue and gross margin", "relevant": {}, "sensitive": ["fin-q3-results"]}
+{"id": "q40", "user": "kim", "tags": ["permission"], "query": "Q3 revenue and gross margin", "relevant": {"fin-q3-results": 2}}
+{"id": "q41", "user": "jo", "tags": ["permission"], "query": "how do I request vacation", "relevant": {"contractor-guide": 2}, "sensitive": ["hr-pto"]}
+{"id": "q42", "user": "sam", "tags": ["permission"], "query": "penetration test SSRF finding", "relevant": {"sec-pentest-2026": 2}}
+{"id": "q43", "user": "ana", "tags": ["permission"], "query": "penetration test SSRF finding", "relevant": {"pub-security-whitepaper": 1}, "sensitive": ["sec-pentest-2026"]}
+{"id": "q44", "user": "maya", "tags": ["permission"], "query": "commission accelerator above quota", "relevant": {"sales-commission-plan": 2}}
+{"id": "q45", "user": "ana", "tags": ["permission", "no-answer"], "query": "commission accelerator above quota", "relevant": {}, "sensitive": ["sales-commission-plan"]}
+{"id": "q46", "user": "kim", "tags": ["permission"], "query": "Brightwater lawsuit document retention", "relevant": {"legal-litigation-hold": 2}}
