@@ -1,0 +1,179 @@
+{
+  "issuer": "https://authz.lab.internal",
+  "audience": "tool-gateway",
+  "jwks": "{\"keys\": [{\"kty\": \"RSA\", \"key_ops\": [\"verify\"], \"n\": \"147jdOhHiaTwlsPVnqeIqPE422SOIccUt9Qdj_xRpVJIp-5s3aUq9othypq11YvqgyadJTk37becRZ8z-lCe1Cm1cCRqbSc2vI6LGKYoCYGYIRV9HimmtlU4poeH831Lpf9dQNpShDHxtM4fhwxt_F8mMIzSXlKqBU6ZUbwaeNShmXbl9jzeJebjjN2wMNLbWR63fTHJYcqMbtdpnt4WfCDOKF6PAXJ0LNS7BxssqglVc_dlOp-r3vjadbeSSv1lWER11DaSyRObIyqm_R-aFH18vS-cQpS5gycBRpiH25NzOnRBt1timPwqFjRJ8_uNoq8mNuVe8sZ0fb1SqROu6Q\", \"e\": \"AQAB\", \"kid\": \"authz-1\", \"alg\": \"RS256\", \"use\": \"sig\"}]}",
+  "employees": {
+    "u-alice": {
+      "name": "Alice Chen",
+      "role": "relationship_manager"
+    },
+    "u-bob": {
+      "name": "Bob Diaz",
+      "role": "support_agent"
+    },
+    "u-carol": {
+      "name": "Carol Ng",
+      "role": "fraud_analyst"
+    },
+    "u-dave": {
+      "name": "Dave Park",
+      "role": "marketing_analyst"
+    },
+    "u-erin": {
+      "name": "Erin Walsh",
+      "role": "relationship_manager"
+    }
+  },
+  "agents": {
+    "cust-assist": {
+      "owner": "Retail Banking",
+      "tools": [
+        "find_customer",
+        "request_authorization",
+        "get_customer_record"
+      ]
+    }
+  },
+  "tools": {
+    "find_customer": {
+      "requires_grant": false,
+      "fields": [
+        "customer_id",
+        "name"
+      ]
+    },
+    "request_authorization": {
+      "requires_grant": false
+    },
+    "get_customer_record": {
+      "requires_grant": true
+    }
+  },
+  "purposes": {
+    "account_servicing": {
+      "roles": [
+        "relationship_manager"
+      ],
+      "basis": "assignment",
+      "ttl_seconds": 300,
+      "allows_restricted": false,
+      "fields": [
+        "customer_id",
+        "name",
+        "email",
+        "phone",
+        "segment",
+        "account_status",
+        "balance",
+        "recent_transactions",
+        "notes"
+      ]
+    },
+    "support_ticket": {
+      "roles": [
+        "support_agent"
+      ],
+      "basis": "ticket",
+      "ttl_seconds": 300,
+      "allows_restricted": false,
+      "fields": [
+        "customer_id",
+        "name",
+        "email",
+        "phone",
+        "account_status"
+      ]
+    },
+    "fraud_investigation": {
+      "roles": [
+        "fraud_analyst"
+      ],
+      "basis": "case",
+      "ttl_seconds": 600,
+      "allows_restricted": true,
+      "fields": [
+        "customer_id",
+        "name",
+        "email",
+        "phone",
+        "address",
+        "date_of_birth",
+        "ssn",
+        "segment",
+        "account_status",
+        "balance",
+        "recent_transactions",
+        "notes",
+        "risk_flags"
+      ]
+    },
+    "marketing_outreach": {
+      "roles": [
+        "marketing_analyst"
+      ],
+      "basis": "consent",
+      "ttl_seconds": 120,
+      "allows_restricted": false,
+      "fields": [
+        "customer_id",
+        "name",
+        "email"
+      ]
+    }
+  },
+  "customers": {
+    "C-1001": {
+      "restricted": false,
+      "marketing_consent": false
+    },
+    "C-1002": {
+      "restricted": false,
+      "marketing_consent": false
+    },
+    "C-1003": {
+      "restricted": true,
+      "marketing_consent": false
+    },
+    "C-1004": {
+      "restricted": false,
+      "marketing_consent": true
+    },
+    "C-1005": {
+      "restricted": false,
+      "marketing_consent": true
+    }
+  },
+  "assignments": {
+    "u-alice": [
+      "C-1001",
+      "C-1002"
+    ],
+    "u-erin": [
+      "C-1004",
+      "C-1005"
+    ]
+  },
+  "tickets": {
+    "T-501": {
+      "customer": "C-1002",
+      "assignee": "u-bob",
+      "status": "open"
+    },
+    "T-502": {
+      "customer": "C-1001",
+      "assignee": "u-bob",
+      "status": "closed"
+    }
+  },
+  "cases": {
+    "FC-77": {
+      "customer": "C-1003",
+      "investigator": "u-carol",
+      "status": "open"
+    }
+  },
+  "revoked": [
+    "revoked-jti"
+  ],
+  "test_private_jwk": "{\"kty\": \"RSA\", \"key_ops\": [\"sign\"], \"n\": \"147jdOhHiaTwlsPVnqeIqPE422SOIccUt9Qdj_xRpVJIp-5s3aUq9othypq11YvqgyadJTk37becRZ8z-lCe1Cm1cCRqbSc2vI6LGKYoCYGYIRV9HimmtlU4poeH831Lpf9dQNpShDHxtM4fhwxt_F8mMIzSXlKqBU6ZUbwaeNShmXbl9jzeJebjjN2wMNLbWR63fTHJYcqMbtdpnt4WfCDOKF6PAXJ0LNS7BxssqglVc_dlOp-r3vjadbeSSv1lWER11DaSyRObIyqm_R-aFH18vS-cQpS5gycBRpiH25NzOnRBt1timPwqFjRJ8_uNoq8mNuVe8sZ0fb1SqROu6Q\", \"e\": \"AQAB\", \"d\": \"DXq69u5biUKOMbwkGWkikf-O1ArxGsptnXBsCAf51w7sY8v0dNVfEjT1gL6B8zOhQft7kjG5l9AgIcTRDEZXi3uvakhsroMbciXiK6cGrYMagni3u6SHiOYoku-6U0IyvwbXMjbOa11wK71EAKVVvC77BWHMLRsAOzEgd0yXxZYKg8RrqNVdN67aZq10QZFZeDOmhtqTz4DvPvf-GQ8v6742EY_cuG_oZIo8h_4lzRhqqgFllg3SgUlPW6d5y4gGnYkFNM1Dg3W42DoMoMflFTAGX9daKYH6lkZH_9QuSOhLZHSPXpFcNwkGNW0fl_POfOJDe-TN60lbPUr0vrvkbQ\", \"p\": \"-I_BCXasPT7sDgvUEf3-LlxqNb2BaDnMD1ftXlqBetx7jGnXcurk7euT2VQme9-OgrR3R0tzc_dKwMokEqr6A28czuacEumrPsadFci_d7DeH_CCfGLJtkTzk56W58cPhy1kJ6BPyUz54b5v6Dhv1IUl8Ip4Og0i_xZJAeoQgD8\", \"q\": \"3gJLHfKAck_U4vnk6rTCuHWB-dcbfjK0S0wbtpJghQCsM82siNLP_KNpUWZUXVVEQUy-69U_peOeax3ADxwrk6LwvDcfRV8TCZ8mG1p_U3uNjKg86NmZm7hhiVWjqy5gsn9hJPOBnIuigZvigHlObbNCMycOEcOdVDs6eBgphtc\", \"dp\": \"DlBI74CT_prnARARUE_uGUFdJGcbUqMxaxjHJI3VsvuLadSWgZmhQUo1o2hDJxMCo-g8jjB8H4t4FI4PcbvC1fvKDugcyMIICH9rgFulGwFmaTRybzNJJmPmGvQhAIvoCwLEJ7wFnDQAl81dqGPHnNdmDeoLblxfTY08-w09kgU\", \"dq\": \"SgjbwfXfrb8_kB2joD19fgP5vzZjvbbs9vs_dqfjthbeVjwtYEdlAqv_8Bw-4A0SQPB17rFjk0-PwcrfBGrxgT9iJnH_ZKPq9ldzXsXUFiPqtVBZV5FRL2PSavj7JpfFuWDPJYJq46iRHcW9R_isFdskpWhNwdDJA5Do06nDF2s\", \"qi\": \"S-ZBjFniJ4fa-hz_DEYln6jjpZpNBg60iKBlYCd45ZzQJ4BBO18SlxYoijV47TWokt-wobfow-l8VbAyNTTchv-QQWNLpKExd6cjbek9nv5i4YNBFbebawo4UGUp8Q5ZLDpPCkDkUdQrymfKwJ7_hKh7JWghPHFsZSupm6i5nNk\", \"kid\": \"authz-1\", \"alg\": \"RS256\"}"
+}

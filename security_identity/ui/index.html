@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Authorization-Gated Agent</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky bar (tabs) over one 1180px column. Run tab = controls column + execution column. */
+:root{
+  --bg:#f2f4f3; --panel:#ffffff; --sunk:#e9edeb; --ink:#131a19; --ink-2:#44504d; --ink-3:#74807c; --line:#d3dad7; --grid:#e4e9e7;
+  --accent:#0b6a70; --accent-ink:#ffffff; --accent-soft:#d9eeed;
+  --trust:#e3f1f0; --trust-line:#9cc9c6; --untrust:#f7efe4; --untrust-line:#dcc29a;
+  --pass:#1f7a45; --pass-bg:#e1f2e6; --warn:#9a5d06; --warn-bg:#f9edd6; --deny:#b8372a; --deny-bg:#f9e3df;
+  --display:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121716; --panel:#1a201f; --sunk:#151a19; --ink:#e8eeec; --ink-2:#b4c0bc; --ink-3:#86938f; --line:#2e3836; --grid:#242c2a;
+  --accent:#4fb8b9; --accent-ink:#0b1414; --accent-soft:#16393a;
+  --trust:#16302f; --trust-line:#2f6664; --untrust:#2e2618; --untrust-line:#6b5530;
+  --pass:#5cc286; --pass-bg:#173323; --warn:#e3a54a; --warn-bg:#3a2a10; --deny:#f07d6e; --deny-bg:#3d1c18;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121716; --panel:#1a201f; --sunk:#151a19; --ink:#e8eeec; --ink-2:#b4c0bc; --ink-3:#86938f; --line:#2e3836; --grid:#242c2a;
+  --accent:#4fb8b9; --accent-ink:#0b1414; --accent-soft:#16393a;
+  --trust:#16302f; --trust-line:#2f6664; --untrust:#2e2618; --untrust-line:#6b5530;
+  --pass:#5cc286; --pass-bg:#173323; --warn:#e3a54a; --warn-bg:#3a2a10; --deny:#f07d6e; --deny-bg:#3d1c18;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body)}
+h1,h2,h3{font-family:var(--display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1{font-size:22px;font-weight:700} h2{font-size:17px;font-weight:600} h3{font-size:14.5px;font-weight:600}
+p{margin:0}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{position:sticky;top:0;z-index:10;background:var(--panel);border-bottom:1px solid var(--line);padding:0 16px}
+.bar-in{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px;padding-top:12px}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand small{display:block;font:12px var(--mono);color:var(--ink-3)}
+.status{font:12px var(--mono);display:flex;align-items:center;gap:6px;color:var(--ink-2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ink-3)}
+.dot.ok{background:var(--pass)} .dot.bad{background:var(--deny)}
+.tabs{flex-basis:100%;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:8px 12px 10px;color:var(--ink-2);cursor:pointer;white-space:nowrap;font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+
+main{padding:0 16px}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 0 64px;display:grid;gap:18px}
+.view{display:grid;gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px;min-width:0}
+.panel>header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px}
+.sub{color:var(--ink-2);font-size:14px;max-width:86ch}
+.muted{color:var(--ink-3)}
+.eyebrow{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.split{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:minmax(0,1fr)}}
+.scroll{overflow-x:auto;min-width:0}
+
+.scen{display:grid;gap:6px}
+.scen button{all:unset;cursor:pointer;display:grid;gap:2px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.scen button:hover{border-color:var(--accent)}
+.scen button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.scen b{font-weight:600;font-size:14px}
+.scen span{font-size:12.5px;color:var(--ink-3)}
+label.f{display:grid;gap:4px;font-size:12.5px;color:var(--ink-2);font-weight:500}
+select,textarea{background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
+textarea{min-height:88px;resize:vertical;font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:7px;padding:8px 16px;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:progress}
+.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--line);font-weight:500;padding:5px 11px}
+.hint{font-size:12.5px;color:var(--ink-3)}
+
+.pill{display:inline-flex;align-items:center;gap:4px;font:500 11.5px var(--mono);padding:1px 8px;border-radius:99px;border:1px solid transparent;white-space:nowrap}
+.pill.allow{background:var(--pass-bg);color:var(--pass)} .pill.deny{background:var(--deny-bg);color:var(--deny)}
+.pill.info{background:var(--sunk);color:var(--ink-2)} .pill.warn{background:var(--warn-bg);color:var(--warn)}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:2px}
+.kpi small{font-size:12px;color:var(--ink-3)} .kpi b{font:600 18px var(--display)}
+.kpi.good b{color:var(--pass)} .kpi.bad b{color:var(--deny)}
+.point{border-left:3px solid var(--accent);padding:6px 12px;background:var(--accent-soft);border-radius:0 6px 6px 0;font-size:14px}
+.answer{white-space:pre-wrap;background:var(--sunk);border-radius:8px;padding:12px 14px;font-size:14px;max-height:260px;overflow:auto}
+
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;font-weight:600;color:var(--ink-2);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--grid);vertical-align:top}
+td code{word-break:break-all}
+
+/* sequence diagram */
+.seq svg{display:block}
+.seq .lane-h{font:600 12px var(--display);fill:var(--ink)}
+.seq .lane-s{font:11px var(--mono);fill:var(--ink-3)}
+.seq .life{stroke:var(--line);stroke-dasharray:3 4}
+.seq .msg{cursor:pointer}
+.seq .msg text{font:11.5px var(--mono);fill:var(--ink-2)}
+.seq .msg line{stroke:var(--ink-3);stroke-width:1.4}
+.seq .msg.allow line{stroke:var(--pass)} .seq .msg.allow text{fill:var(--pass)}
+.seq .msg.deny line{stroke:var(--deny)} .seq .msg.deny text{fill:var(--deny)}
+.seq .msg .hit{fill:transparent}
+.seq .msg:hover .hit,.seq .msg.sel .hit{fill:var(--accent-soft)}
+.seq .msg.hidden{display:none}
+.seq .num{font:10px var(--mono);fill:var(--ink-3)}
+.detail{display:grid;gap:10px}
+.detail pre{margin:0;background:var(--sunk);border-radius:8px;padding:10px 12px;font:12px/1.5 var(--mono);overflow:auto;max-height:340px;white-space:pre-wrap;word-break:break-word}
+.detail .k{font:500 11.5px var(--mono);color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.reasons{display:grid;gap:4px;margin:0;padding:0;list-style:none}
+.reasons li{font-size:13.5px} .reasons code{color:var(--deny);font-weight:600;margin-right:6px}
+.j-t{color:var(--pass);font-weight:600} .j-f{color:var(--deny);font-weight:600} .j-k{color:var(--accent)}
+
+/* architecture */
+.arch text{font-family:var(--body)}
+.arch .box rect{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
+.arch .box.key rect{stroke:var(--accent);stroke-width:2}
+.arch .t1{font:600 13px var(--display);fill:var(--ink)} .arch .t2{font:11.5px var(--body);fill:var(--ink-2)}
+.arch .zone-u{fill:var(--untrust);stroke:var(--untrust-line);stroke-dasharray:5 4}
+.arch .zone-t{fill:var(--trust);stroke:var(--trust-line)}
+.arch .zl{font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.arch .e{stroke:var(--ink-3);stroke-width:1.4;fill:none}
+.arch .e.bad{stroke:var(--deny);stroke-dasharray:4 4}
+.arch .el{font:11px var(--mono);fill:var(--ink-2)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:4px;font-size:14px}
+.card b{font-family:var(--display)}
+pre.code{margin:0;background:var(--sunk);border-radius:8px;padding:12px 14px;font:12px/1.55 var(--mono);overflow:auto;max-height:520px}
+.empty{color:var(--ink-3);font-size:14px;padding:24px 0;text-align:center}
+.banner{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 14px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="bar"><div class="bar-in">
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" fill="var(--accent)"/><path d="M14 6l7 3v5c0 4.2-3 7.4-7 8.5-4-1.1-7-4.3-7-8.5V9z" fill="none" stroke="var(--accent-ink)" stroke-width="1.8"/><path d="M10.8 14.2l2.3 2.3 4.2-4.6" fill="none" stroke="var(--accent-ink)" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <div><h1>Authorization-gated customer agent</h1><small>tool calls enforced by OPA, outside the model</small></div>
+  </div>
+  <div class="status"><span class="dot" id="opaDot"></span><span id="opaText">connecting…</span></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="run">Run</button>
+    <button role="tab" aria-selected="false" data-tab="arch">Architecture &amp; flow</button>
+    <button role="tab" aria-selected="false" data-tab="policy">Policy</button>
+    <button role="tab" aria-selected="false" data-tab="audit">Audit log</button>
+  </nav>
+</div></div>
+
+<main><div class="wrap">
+<div id="offline" class="banner" hidden>The API is not reachable. Start OPA and the app: <code>docker compose up -d</code> then <code>uv run python run.py</code>, and open <code>http://localhost:8090</code>.</div>
+
+<!-- RUN -->
+<section class="view" data-view="run">
+  <div class="split">
+    <div class="panel">
+      <header><h2>Scenarios</h2></header>
+      <div class="scen" id="scenarios"></div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:4px 0">
+      <div class="grid2">
+        <label class="f">Signed-in employee<select id="user"></select></label>
+        <label class="f">Agent instructions<select id="mode"></select></label>
+      </div>
+      <p class="hint" id="modeHint"></p>
+      <label class="f">Model<select id="backend"></select></label>
+      <label class="f">Prompt<textarea id="prompt"></textarea></label>
+      <div class="row"><button class="btn" id="runBtn">Run agent</button><span class="hint" id="runHint"></span></div>
+    </div>
+
+    <div class="view">
+      <div class="panel" id="outcome">
+        <header><h2>Outcome</h2><span class="hint" id="runMeta"></span></header>
+        <div id="outcomeBody"><p class="empty">Pick a scenario and run the agent. Every hop it makes is drawn below.</p></div>
+      </div>
+      <div class="panel">
+        <header><h2>Execution</h2>
+          <div class="row"><button class="btn ghost" id="replay">Replay</button><button class="btn ghost" id="showAll">Show all</button></div>
+        </header>
+        <p class="sub">Each arrow is one hop in the actual run. Green is an allow decision, red a deny. Select an arrow to see the exact OPA input and result.</p>
+        <div class="seq scroll" id="seq"><p class="empty">No run yet.</p></div>
+      </div>
+      <div class="panel">
+        <header><h2 id="detTitle">Step detail</h2><span id="detPill"></span></header>
+        <div class="detail" id="detail"><p class="empty">Select an arrow in the execution diagram.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="view" data-view="arch" hidden>
+  <div class="panel">
+    <header><h2>Architecture</h2><span class="hint">The model and its instructions are untrusted. Enforcement lives in the shaded zone.</span></header>
+    <div class="scroll arch">
+      <svg viewBox="0 0 1080 500" width="1080" role="img" aria-label="Architecture diagram">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink-3)"/></marker></defs>
+        <rect class="zone-u" x="170" y="20" width="330" height="430" rx="12"/>
+        <text class="zl" x="186" y="42" fill="var(--warn)">untrusted · can be wrong or manipulated</text>
+        <rect class="zone-t" x="530" y="20" width="530" height="430" rx="12"/>
+        <text class="zl" x="546" y="42" fill="var(--accent)">trusted enforcement · independent of the prompt</text>
+
+        <g class="box"><rect x="16" y="190" width="130" height="70" rx="9"/><text class="t1" x="30" y="218">Employee</text><text class="t2" x="30" y="238">signed-in session</text></g>
+        <g class="box"><rect x="200" y="70" width="270" height="92" rx="9"/><text class="t1" x="216" y="96">LLM</text><text class="t2" x="216" y="116">reads system prompt, user prompt,</text><text class="t2" x="216" y="132">tool results (may carry injections)</text><text class="t2" x="216" y="148">proposes tool calls only</text></g>
+        <g class="box"><rect x="200" y="200" width="270" height="110" rx="9"/><text class="t1" x="216" y="226">Agent runtime</text><text class="t2" x="216" y="246">runs the tool-calling loop</text><text class="t2" x="216" y="262">attaches user, agent id, session</text><text class="t2" x="216" y="278">from the session, not the model</text><text class="t2" x="216" y="294">holds no credentials</text></g>
+        <g class="box"><rect x="200" y="350" width="270" height="70" rx="9"/><text class="t1" x="216" y="376">Agent instructions</text><text class="t2" x="216" y="396">compliant · unaware · rogue</text></g>
+
+        <g class="box key"><rect x="560" y="200" width="210" height="110" rx="9"/><text class="t1" x="576" y="226">Tool gateway (PEP)</text><text class="t2" x="576" y="246">asks OPA on every tool call</text><text class="t2" x="576" y="262">fails closed if OPA is down</text><text class="t2" x="576" y="278">returns only allowed fields</text><text class="t2" x="576" y="294">writes the audit log</text></g>
+        <g class="box key"><rect x="830" y="70" width="210" height="100" rx="9"/><text class="t1" x="846" y="96">OPA (PDP)</text><text class="t2" x="846" y="116">custauthz.grant</text><text class="t2" x="846" y="132">custauthz.access</text><text class="t2" x="846" y="148">verifies grant signature (JWKS)</text></g>
+        <g class="box"><rect x="560" y="70" width="210" height="100" rx="9"/><text class="t1" x="576" y="96">Authorization server</text><text class="t2" x="576" y="116">asks OPA, then signs a</text><text class="t2" x="576" y="132">5-min RS256 grant bound to</text><text class="t2" x="576" y="148">user · session · agent · customer</text></g>
+        <g class="box"><rect x="830" y="230" width="210" height="80" rx="9"/><text class="t1" x="846" y="256">Customer records</text><text class="t2" x="846" y="276">PII; reachable only</text><text class="t2" x="846" y="292">through the gateway</text></g>
+        <g class="box"><rect x="560" y="350" width="210" height="70" rx="9"/><text class="t1" x="576" y="376">Audit log</text><text class="t2" x="576" y="396">every decision and release</text></g>
+        <g class="box"><rect x="830" y="350" width="210" height="70" rx="9"/><text class="t1" x="846" y="376">Policy data</text><text class="t2" x="846" y="396">roles · assignments · tickets · JWKS</text></g>
+
+        <path class="e" d="M146 225H200" marker-end="url(#ah)"/><text class="el" x="150" y="216">prompt</text>
+        <path class="e" d="M300 200V162" marker-end="url(#ah)"/><path class="e" d="M370 162V200" marker-end="url(#ah)"/><text class="el" x="376" y="186">tool calls</text>
+        <path class="e" d="M335 350V310" marker-end="url(#ah)"/>
+        <path class="e" d="M470 255H560" marker-end="url(#ah)"/><text class="el" x="478" y="246">tool call</text><text class="el" x="478" y="272">+ session</text>
+        <path class="e" d="M665 200V170" marker-end="url(#ah)"/><text class="el" x="659" y="190" text-anchor="end">grant request</text>
+        <path class="e" d="M770 120H830" marker-end="url(#ah)"/><text class="el" x="774" y="112">may issue?</text>
+        <path class="e" d="M770 225C800 225 800 160 830 160" marker-end="url(#ah)"/><text class="el" x="842" y="196">may call?</text>
+        <path class="e" d="M770 270H830" marker-end="url(#ah)"/><text class="el" x="776" y="262">read</text>
+        <path class="e" d="M665 310V350" marker-end="url(#ah)"/>
+        <path class="e" d="M1040 385H1050V120H1042" marker-end="url(#ah)" style="stroke-dasharray:3 3"/>
+        <text class="el" x="530" y="478" text-anchor="middle" style="fill:var(--deny)">There is no path from the untrusted zone to the records store except through the tool gateway; the runtime holds no credentials.</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="panel">
+    <header><h2>Request flow</h2><span class="hint">The authorized path, as drawn on the Run tab</span></header>
+    <div class="seq scroll" id="seqStatic"></div>
+  </div>
+
+  <div class="panel">
+    <header><h2>Why the denial does not depend on the agent's instructions</h2></header>
+    <div class="cards">
+      <div class="card"><b>The model only proposes</b><span class="sub">It returns tool-call JSON. The runtime executes it, through the gateway, and nothing else can reach the records store.</span></div>
+      <div class="card"><b>Identity comes from the session</b><span class="sub">User, agent id and session id are attached by the runtime. A prompt cannot change who the request is for.</span></div>
+      <div class="card"><b>OPA checks the grant itself</b><span class="sub">Signature against the authorization server's JWKS, expiry, audience, user, session, agent and customer. A made-up or borrowed grant fails.</span></div>
+      <div class="card"><b>Entitlement is re-checked</b><span class="sub">Each read re-runs the grant policy, so a grant cannot be pointed at another customer or outlive the relationship it was issued for.</span></div>
+      <div class="card"><b>Fields come from policy</b><span class="sub">The purpose in the signed grant decides which fields leave the gateway. The agent cannot ask for more.</span></div>
+      <div class="card"><b>Fails closed</b><span class="sub">If OPA is unreachable or returns no decision, the gateway denies.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- POLICY -->
+<section class="view" data-view="policy" hidden>
+  <div class="panel">
+    <header><h2>Rules</h2><span class="hint">Every deny names one of these IDs</span></header>
+    <div class="scroll"><table id="rules"><thead><tr><th>ID</th><th>Policy</th><th>Denies when</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="panel">
+    <header><h2>Purposes</h2><span class="hint">Who may ask, on what basis, and which fields are released</span></header>
+    <div class="scroll"><table id="purposes"><thead><tr><th>Purpose</th><th>Roles</th><th>Basis</th><th>TTL</th><th>Fields released</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="panel"><header><h2>policies/grant.rego</h2></header><pre class="code" id="regoGrant"></pre></div>
+  <div class="panel"><header><h2>policies/access.rego</h2></header><pre class="code" id="regoAccess"></pre></div>
+</section>
+
+<!-- AUDIT -->
+<section class="view" data-view="audit" hidden>
+  <div class="panel">
+    <header><h2>Audit log</h2><button class="btn ghost" id="auditRefresh">Refresh</button></header>
+    <p class="sub">One event per decision by the authorization server and the tool gateway, newest first. Kept in memory for this process.</p>
+    <div class="scroll"><table id="audit"><thead><tr><th>Time (UTC)</th><th>Component</th><th>Action</th><th>Employee</th><th>Session</th><th>Customer</th><th>Decision</th><th>Fields released</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+</div></main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const state = {meta: null, scenario: null, run: null, sel: null, timer: null};
+
+const LANES = [
+  {id: "user", name: "Employee", sub: "session"},
+  {id: "llm", name: "LLM", sub: "untrusted"},
+  {id: "agent", name: "Agent runtime", sub: "tool loop"},
+  {id: "gateway", name: "Tool gateway", sub: "PEP"},
+  {id: "authz", name: "Authz server", sub: "issues grants"},
+  {id: "opa", name: "OPA", sub: "PDP"},
+  {id: "records", name: "Records", sub: "PII store"},
+];
+
+const RULES = [
+  ["G1", "grant", "the employee or agent is unknown"], ["G2", "grant", "the customer does not exist"],
+  ["G3", "grant", "the purpose is not one of the defined purposes"], ["G4", "grant", "the employee's role may not use that purpose"],
+  ["G5", "grant", "no assignment, open ticket, open case or consent links the employee to the customer"],
+  ["G6", "grant", "the customer is restricted and the purpose cannot unlock it"],
+  ["T1", "access", "the agent is not registered or the tool is not in its manifest"], ["T2", "access", "the session user is not a known employee"],
+  ["R1", "access", "a record read carries no grant"], ["R2", "access", "the grant is not signed by the authorization server's key"],
+  ["R3", "access", "the grant has expired"], ["R4", "access", "the grant's issuer or audience is wrong"],
+  ["R5", "access", "the grant was issued to a different employee"], ["R6", "access", "the grant was issued to a different session"],
+  ["R7", "access", "the grant was issued to a different agent"], ["R8", "access", "the grant names a different customer, or no customer is given"],
+  ["R9", "access", "the grant has been revoked"], ["R10", "access", "re-running the grant policy now, for the requested customer, denies"],
+];
+
+// ---------- tabs ----------
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("[data-view]").forEach(v => v.hidden = v.dataset.view !== b.dataset.tab);
+  if (b.dataset.tab === "audit") loadAudit();
+});
+
+// ---------- bootstrap ----------
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+async function init() {
+  drawStatic();
+  fillRules();
+  try { state.meta = await api("/api/meta"); }
+  catch { $("#offline").hidden = false; $("#opaDot").className = "dot bad"; $("#opaText").textContent = "API offline"; $("#runBtn").disabled = true; return; }
+  const m = state.meta;
+  $("#opaDot").className = "dot " + (m.opa_healthy ? "ok" : "bad");
+  $("#opaText").textContent = (m.opa_healthy ? "OPA live · " : "OPA down · ") + m.opa.replace("http://", "");
+  $("#user").innerHTML = Object.entries(m.employees).map(([id, e]) => `<option value="${id}">${esc(e.name)} · ${e.role.replace(/_/g, " ")}</option>`).join("");
+  $("#mode").innerHTML = Object.entries(m.modes).map(([id, x]) => `<option value="${id}">${esc(x.label)}</option>`).join("");
+  $("#backend").innerHTML = Object.entries(m.backends).flatMap(([b, ms]) => ms.map(x => `<option value="${b}|${x}">${b} · ${x}</option>`)).join("");
+  if (!m.backends.groq) $("#runHint").textContent = "Set GROQ_API_KEY to run a real model.";
+  $("#mode").onchange = () => $("#modeHint").textContent = m.modes[$("#mode").value].summary;
+  $("#scenarios").innerHTML = m.scenarios.map(s => `<button data-id="${s.id}" aria-pressed="false"><b>${esc(s.title)}</b><span>${esc(m.employees[s.user].name)} · ${m.modes[s.mode].label} instructions</span></button>`).join("");
+  $("#scenarios").onclick = e => { const b = e.target.closest("button"); if (b) pick(b.dataset.id); };
+  fillPurposes(m.purposes);
+  pick(m.scenarios[0].id);
+  api("/api/policies").then(p => { $("#regoGrant").textContent = p["grant.rego"]; $("#regoAccess").textContent = p["access.rego"]; });
+}
+
+function pick(id) {
+  const s = state.meta.scenarios.find(x => x.id === id);
+  state.scenario = s;
+  document.querySelectorAll("#scenarios button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === id));
+  $("#user").value = s.user; $("#mode").value = s.mode; $("#mode").onchange();
+  $("#prompt").value = shownPrompt(s);
+}
+const shownPrompt = s => s.prompt.replace("{alice_grant}", "<a real grant issued to Alice is inserted at run time>");
+
+// ---------- run ----------
+$("#runBtn").onclick = async () => {
+  const s = state.scenario, [backend, model] = $("#backend").value.split("|");
+  const body = {backend, model, user: $("#user").value, mode: $("#mode").value};
+  // An unedited scenario is sent by id, so the server can fill in placeholders such as Alice's real grant.
+  if (s && $("#prompt").value === shownPrompt(s) && body.user === s.user && body.mode === s.mode) body.scenario = s.id;
+  else body.prompt = $("#prompt").value;
+  $("#runBtn").disabled = true; $("#runHint").textContent = backend === "groq" ? "Calling the model…" : "Running…";
+  try {
+    state.run = await api("/api/run", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    state.run.point = s && body.scenario ? s.point : null;
+    renderOutcome(state.run); drawSeq($("#seq"), state.run.trace, true);
+    $("#runHint").textContent = "";
+  } catch (e) { $("#runHint").textContent = "Error: " + e.message; }
+  $("#runBtn").disabled = false;
+};
+
+function renderOutcome(r) {
+  const denied = r.calls.filter(c => !c.allow).length;
+  const emp = state.meta.employees[r.user];
+  $("#runMeta").textContent = `${emp.name} · ${state.meta.modes[r.mode].label} instructions · ${r.backend}/${r.model} · ${r.session}`;
+  const leak = (r.unexpected_release || []).length;
+  $("#outcomeBody").innerHTML = `
+    ${r.point ? `<p class="point">${esc(r.point)}</p>` : ""}
+    <div class="kpis">
+      <div class="kpi"><small>Tool calls</small><b>${r.calls.length}</b></div>
+      <div class="kpi ${denied ? "bad" : ""}"><small>Denied by policy</small><b>${denied}</b></div>
+      <div class="kpi ${r.released.length ? "good" : ""}"><small>Records released</small><b>${r.released.join(", ") || "none"}</b></div>
+      ${r.unexpected_release ? `<div class="kpi ${leak ? "bad" : "good"}"><small>Unexpected release</small><b>${leak ? r.unexpected_release.join(", ") : "none"}</b></div>` : ""}
+    </div>
+    <div class="scroll"><table><thead><tr><th>#</th><th>Tool call proposed by the model</th><th>Decision</th><th>Rules</th></tr></thead><tbody>
+      ${r.calls.map((c, i) => `<tr><td class="muted">${i + 1}</td><td><code>${esc(c.tool)}(${esc(briefArgs(c.args))})</code></td>
+        <td><span class="pill ${c.allow ? "allow" : "deny"}">${c.allow ? "allow" : "deny"}</span></td>
+        <td style="white-space:nowrap">${c.reasons.map(id => `<code title="${esc(ruleText(id))}">${id}</code>`).join(" ") || '<span class="muted">—</span>'}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">The model made no tool calls.</td></tr>`}
+    </tbody></table></div>
+    <div><div class="k eyebrow" style="margin-bottom:6px">Answer to the employee</div><div class="answer">${esc(r.answer)}</div></div>`;
+}
+
+const ruleText = id => (RULES.find(r => r[0] === id) || [, , ""])[2];
+const briefArgs = a => Object.entries(a || {}).map(([k, v]) => `${k}=${typeof v === "string" && v.length > 22 ? v.slice(0, 16) + "…" : JSON.stringify(v)}`).join(", ");
+
+// ---------- sequence diagram ----------
+function drawSeq(host, events, animate) {
+  clearInterval(state.timer);
+  const lw = Math.max(112, Math.floor((host.clientWidth || 1050) / LANES.length)), top = 58, rowH = 34, W = LANES.length * lw, H = top + events.length * rowH + 24;
+  const x = id => LANES.findIndex(l => l.id === id) * lw + lw / 2;
+  const zone = (from, to, cls) => `<rect x="${x(from) - lw / 2 + 4}" y="4" width="${(x(to) - x(from)) + lw - 8}" height="${H - 8}" rx="8" class="${cls}"/>`;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Sequence of hops">
+    <defs>${["ink-3", "pass", "deny"].map(c => `<marker id="m-${host.id}-${c}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--${c})"/></marker>`).join("")}</defs>
+    <g style="opacity:.55">${zone("llm", "llm", "zone-u")}${zone("gateway", "records", "zone-t")}</g>
+    <style>.zone-u{fill:var(--untrust);stroke:var(--untrust-line);stroke-dasharray:5 4}.zone-t{fill:var(--trust);stroke:var(--trust-line)}</style>`;
+  LANES.forEach(l => {
+    s += `<text class="lane-h" x="${x(l.id)}" y="24" text-anchor="middle">${l.name}</text><text class="lane-s" x="${x(l.id)}" y="40" text-anchor="middle">${l.sub}</text>
+          <line class="life" x1="${x(l.id)}" y1="48" x2="${x(l.id)}" y2="${H - 8}"/>`;
+  });
+  events.forEach((e, i) => {
+    const y = top + i * rowH + 20, x1 = x(e.from), x2 = x(e.to), dir = x2 > x1 ? 1 : -1;
+    const col = e.status === "allow" ? "pass" : e.status === "deny" ? "deny" : "ink-3";
+    const max = Math.floor((Math.abs(x2 - x1) + 36) / 7), label = e.label.length > max ? e.label.slice(0, max - 1) + "…" : e.label;
+    s += `<g class="msg ${e.status}${animate ? " hidden" : ""}" data-i="${i}" tabindex="0">
+      <rect class="hit" x="0" y="${y - 20}" width="${W}" height="${rowH}" rx="4"/>
+      <text class="num" x="6" y="${y + 4}">${e.step}</text>
+      <line x1="${x1 + dir * 3}" y1="${y}" x2="${x2 - dir * 5}" y2="${y}" marker-end="url(#m-${host.id}-${col})"/>
+      <text x="${(x1 + x2) / 2}" y="${y - 6}" text-anchor="middle">${esc(label)}</text></g>`;
+  });
+  host.innerHTML = s + "</svg>";
+  host.querySelectorAll(".msg").forEach(g => {
+    const open = () => select(host, events, +g.dataset.i);
+    g.onclick = open; g.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } };
+  });
+  if (!animate) return;
+  let i = 0; const gs = host.querySelectorAll(".msg");
+  state.timer = setInterval(() => {
+    if (i >= gs.length) { clearInterval(state.timer); return; }
+    gs[i].classList.remove("hidden");
+    if (host.id === "seq" && events[i].from === "opa") select(host, events, i, true);
+    // End on the most telling decision: the last deny from OPA, else the last OPA decision.
+    if (host.id === "seq" && i === gs.length - 1) {
+      const opa = events.map((e, j) => [e, j]).filter(([e]) => e.from === "opa");
+      const pickJ = (opa.filter(([e]) => e.status === "deny").pop() || opa.pop() || [null, i])[1];
+      select(host, events, pickJ, true);
+    }
+    i++;
+  }, 260);
+}
+
+function select(host, events, i, auto) {
+  if (host.id !== "seq") return;
+  host.querySelectorAll(".msg").forEach(g => g.classList.toggle("sel", +g.dataset.i === i));
+  const e = events[i], lane = id => LANES.find(l => l.id === id).name;
+  $("#detTitle").textContent = `Step ${e.step} · ${lane(e.from)} → ${lane(e.to)}`;
+  $("#detPill").innerHTML = `<span class="pill ${e.status}">${esc(e.label.length > 40 ? e.label.slice(0, 39) + "…" : e.label)}</span>`;
+  const d = e.detail || {};
+  let html = "";
+  const deny = d.result && Array.isArray(d.result.deny) ? d.result.deny : d.reasons || (d.result && d.result.reasons);
+  if (deny && deny.length) html += `<div><div class="k">Deny reasons</div><ul class="reasons">${deny.map(r => `<li><code>${r.id}</code>${esc(r.msg)}</li>`).join("")}</ul></div>`;
+  for (const [k, v] of Object.entries(d)) {
+    if (v === null || v === undefined || v === "") continue;
+    const label = {input: "OPA input", result: e.from === "opa" ? "OPA result" : "Result returned to the model", claims: "Grant claims (signed)", system_prompt: "System prompt sent to the model", text: "Text"}[k] || k.replace(/_/g, " ");
+    html += `<div><div class="k">${esc(label)}</div>${typeof v === "object" ? `<pre>${jsonHtml(v)}</pre>` : `<pre>${esc(v)}</pre>`}</div>`;
+  }
+  $("#detail").innerHTML = html || '<p class="muted">No detail for this hop.</p>';
+  if (!auto) $("#detail").scrollIntoView({block: "nearest", behavior: "smooth"});
+}
+
+function jsonHtml(v) {
+  const short = JSON.parse(JSON.stringify(v, (k, x) => typeof x === "string" && /^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(x) ? x.slice(0, 28) + "…(signed JWT, " + x.length + " chars)" : x));
+  return esc(JSON.stringify(short, null, 2))
+    .replace(/&quot;([\w-]+)&quot;:/g, '<span class="j-k">"$1"</span>:')
+    .replace(/: true/g, ': <span class="j-t">true</span>').replace(/: false/g, ': <span class="j-f">false</span>');
+}
+
+$("#replay").onclick = () => state.run && drawSeq($("#seq"), state.run.trace, true);
+$("#showAll").onclick = () => state.run && drawSeq($("#seq"), state.run.trace, false);
+
+// The nominal authorized flow, for the Architecture tab.
+function drawStatic() {
+  const ev = [
+    ["user", "agent", "prompt"], ["agent", "llm", "chat completion"], ["llm", "agent", "request_authorization"],
+    ["agent", "gateway", "request_authorization(...)"], ["gateway", "opa", "custauthz/access: tool allowed?"], ["opa", "gateway", "allow", "allow"],
+    ["gateway", "authz", "request grant"], ["authz", "opa", "custauthz/grant: issue?"], ["opa", "authz", "allow + fields + ttl", "allow"],
+    ["authz", "gateway", "signed grant (RS256)", "allow"], ["gateway", "agent", "grant"], ["agent", "llm", "chat completion"],
+    ["llm", "agent", "get_customer_record"], ["agent", "gateway", "get_customer_record(id, grant)"],
+    ["gateway", "opa", "custauthz/access: verify grant"], ["opa", "gateway", "allow + fields", "allow"],
+    ["gateway", "records", "read"], ["records", "gateway", "record"], ["gateway", "agent", "allowed fields only", "allow"],
+    ["agent", "llm", "chat completion"], ["llm", "agent", "final answer"], ["agent", "user", "answer"],
+  ].map(([from, to, label, status], i) => ({step: i + 1, from, to, label, status: status || "info"}));
+  drawSeq($("#seqStatic"), ev, false);
+}
+
+// ---------- policy & audit ----------
+function fillRules() {
+  $("#rules tbody").innerHTML = RULES.map(([id, p, t]) => `<tr><td><code>${id}</code></td><td><code>custauthz.${p}</code></td><td>${esc(t)}</td></tr>`).join("");
+}
+function fillPurposes(p) {
+  $("#purposes tbody").innerHTML = Object.entries(p).map(([k, v]) => `<tr><td><code>${k}</code></td><td>${v.roles.map(r => r.replace(/_/g, " ")).join(", ")}</td><td>${v.basis}${v.allows_restricted ? " · unlocks restricted" : ""}</td><td>${v.ttl_seconds}s</td><td class="muted">${v.fields.join(", ")}</td></tr>`).join("");
+}
+async function loadAudit() {
+  try {
+    const rows = await api("/api/audit");
+    $("#audit tbody").innerHTML = rows.map(r => `<tr><td class="mono">${r.ts.slice(11, 23)}</td><td>${r.component}</td><td><code>${r.action}</code></td><td>${r.user}</td><td class="mono">${r.session}</td><td>${r.customer_id || "—"}</td>
+      <td><span class="pill ${r.allow ? "allow" : "deny"}">${r.allow ? "allow" : "deny"}</span> ${r.reasons.map(x => `<code title="${esc(ruleText(x))}">${x}</code>`).join(" ")}</td>
+      <td class="muted">${(r.fields_released || []).length ? r.fields_released.length + " fields" : "—"}</td></tr>`).join("") || `<tr><td colspan="8" class="empty">No events yet. Run a scenario.</td></tr>`;
+  } catch { $("#audit tbody").innerHTML = `<tr><td colspan="8" class="empty">API offline.</td></tr>`; }
+}
+$("#auditRefresh").onclick = loadAudit;
+
+init();
+</script>
+</body>
+</html>
