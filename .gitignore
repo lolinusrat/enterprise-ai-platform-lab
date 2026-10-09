@@ -1,0 +1,17 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local secrets
+.env
+!.env.example
+
+# Generated per run (each use case keeps a committed sample)
+gateway_finops/cost_report_*.csv

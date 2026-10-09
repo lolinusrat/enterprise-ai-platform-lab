@@ -1,0 +1,56 @@
+
+==============================================================================
+0. Gateway health
+==============================================================================
+ready  status=healthy  db=connected
+
+==============================================================================
+1. Onboard three applications (team + virtual key each)
+==============================================================================
+support-bot      team=1f84da71  models=['chat', 'smart', 'fast', 'smart-outage']  budget=$1.0  rpm=-
+analytics-batch  team=b3739b6f  models=['smart']  budget=$0.0001  rpm=-
+internal-wiki    team=820ab9b4  models=['fast']  budget=$1.0  rpm=2
+
+==============================================================================
+2. Routing
+==============================================================================
+2a. Explicit tier routing - the app chooses by model name
+  model=fast   -> ollama-llama3.2-1b   status=200 cost=$0.00000072
+  model=smart  -> groq-gpt-oss-20b     status=200 cost=$0.00006292
+
+2b. Weighted load balancing - model 'chat' spans both endpoints (weights ollama 3 : groq 1)
+  chat-ollama          13 / 20
+  chat-groq             7 / 20
+
+==============================================================================
+3. Fallback
+==============================================================================
+Real upstream failure: 'smart-outage' points at Groq with bad credentials; fallback chain -> 'fast'
+  request 1: status=200 served_by=ollama-llama3.2-1b attempted_fallbacks=1
+  request 2: status=200 served_by=ollama-llama3.2-1b attempted_fallbacks=1
+
+==============================================================================
+4. Quotas
+==============================================================================
+4a. Model allow-list: internal-wiki may only use 'fast'
+  model=smart -> status=403  The requested model 'smart' is not available for this API key, or the model name is invalid. Check the models available to you and try again
+
+4b. Rate limit: internal-wiki key is capped at 2 requests/minute
+  request 1: status=200
+  request 2: status=200
+  request 3: status=429  Rate limit exceeded for api_key: 52f5f8ee93cc125f10a8447ee3a85b5a76e59884a8305197aa28e9b18fdd2227. Limit type: requests. Current limit: 2, R
+
+4c. Budget: analytics-batch team has a $0.0001 budget on the metered 'smart' tier
+  request 1: status=200 cost=$0.00006015
+  request 2: status=200 cost=$0.00005955
+  request 3: status=422  Budget has been exceeded! Team=b3739b6f-4a61-4edd-963a-63a6a74579c8 Current cost: 0.00011969999999999998, Max budget: 0.0001
+
+==============================================================================
+5. Per-application cost report (read back from the gateway's spend ledger)
+==============================================================================
+application      served blocked  tokens     ledger $       team $  budget $  deployments
+support-bot          24       0    1928   0.00020005   0.00020006       1.0  chat-ollamax13, chat-groqx7, ollama-llama3.2-1bx3, groq-gpt-oss-20bx1
+analytics-batch       2       1     516   0.00011970   0.00011970    0.0001  groq-gpt-oss-20bx2
+internal-wiki         2       2      68   0.00000136   0.00000136       1.0  ollama-llama3.2-1bx2
+
+written cost_report_073011.csv

@@ -1,0 +1,67 @@
+# Two model endpoints behind one gateway:
+#   - Groq (cloud, metered)       openai/gpt-oss-20b
+#   - Ollama (local, on this Mac) llama3.2:1b
+# Prices are USD per token. Groq figures match LiteLLM's built-in price map
+# ($0.075 / $0.30 per 1M tokens). Ollama has no invoice, so it carries an internal
+# chargeback rate ($0.02 per 1M tokens) so local usage still shows up per application.
+
+model_list:
+  # --- explicit routes: the app picks the tier by model name ---
+  - model_name: smart
+    litellm_params:
+      model: groq/openai/gpt-oss-20b
+      api_key: os.environ/GROQ_API_KEY
+      input_cost_per_token: 0.000000075
+      output_cost_per_token: 0.0000003
+    model_info: { id: groq-gpt-oss-20b }
+
+  - model_name: fast
+    litellm_params:
+      model: ollama_chat/llama3.2:1b
+      api_base: os.environ/OLLAMA_API_BASE
+      input_cost_per_token: 0.00000002
+      output_cost_per_token: 0.00000002
+    model_info: { id: ollama-llama3.2-1b }
+
+  # --- load-balanced route: one name, both endpoints, 3:1 weighted toward local ---
+  - model_name: chat
+    litellm_params:
+      model: ollama_chat/llama3.2:1b
+      api_base: os.environ/OLLAMA_API_BASE
+      input_cost_per_token: 0.00000002
+      output_cost_per_token: 0.00000002
+      weight: 3
+    model_info: { id: chat-ollama }
+  - model_name: chat
+    litellm_params:
+      model: groq/openai/gpt-oss-20b
+      api_key: os.environ/GROQ_API_KEY
+      input_cost_per_token: 0.000000075
+      output_cost_per_token: 0.0000003
+      weight: 1
+    model_info: { id: chat-groq }
+
+  # --- a deliberately broken upstream (bad credentials) used to show real failover ---
+  - model_name: smart-outage
+    litellm_params:
+      model: groq/openai/gpt-oss-20b
+      api_key: gsk_invalid_key_to_simulate_an_outage
+      input_cost_per_token: 0.000000075
+      output_cost_per_token: 0.0000003
+    model_info: { id: groq-broken }
+
+router_settings:
+  routing_strategy: simple-shuffle   # honours `weight`
+  num_retries: 0                     # keep the demo deterministic: fail over instead of retrying
+  fallbacks:
+    - smart: [fast]                  # cloud tier down -> local model
+    - smart-outage: [fast]
+
+litellm_settings:
+  drop_params: true
+  request_timeout: 60
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  proxy_batch_write_at: 2            # flush spend to Postgres every 2 s (default is slower)

@@ -1,0 +1,4 @@
+application,team_id,requests,blocked,tokens,ledger_spend_usd,team_spend_usd,max_budget_usd,deployments
+support-bot,1f84da71-160e-408f-aecf-d63419dc5ff7,24,0,1928,0.000200055,0.000200055,1.0,"chat-ollamax13, chat-groqx7, ollama-llama3.2-1bx3, groq-gpt-oss-20bx1"
+analytics-batch,b3739b6f-4a61-4edd-963a-63a6a74579c8,2,1,516,0.0001197,0.0001197,0.0001,groq-gpt-oss-20bx2
+internal-wiki,820ab9b4-2df2-48f5-a479-44735eca9505,2,2,68,1.36e-06,1.36e-06,1.0,ollama-llama3.2-1bx2
